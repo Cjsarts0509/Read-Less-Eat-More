@@ -61,6 +61,7 @@ jobs:
           MAX_PLACES_PER_BRANCH: ${{ vars.MAX_PLACES_PER_BRANCH }}
           GOOGLE_MAX_PER_BRANCH: ${{ vars.GOOGLE_MAX_PER_BRANCH }}
           AI_MAX_PLACES_PER_RUN: ${{ inputs.ai_budget || vars.AI_MAX_PLACES_PER_RUN }}
+          WEB_SEARCH_MAX_PER_RUN: ${{ vars.WEB_SEARCH_MAX_PER_RUN }}
           BRANCHES: ${{ inputs.branches }}
 
       - name: 바뀐 데이터 커밋

@@ -34,10 +34,13 @@ export async function loadPlaces(branch: Branch, demo: boolean): Promise<BranchP
 
 export interface AppConfig {
   ai: boolean;
+  /** Supabase 저장소 (투표방 · 메뉴판 사진 · 날씨) */
+  store: boolean;
 }
 
 export async function loadConfig(): Promise<AppConfig> {
-  return (await getJson<AppConfig>("/api/config")) ?? { ai: false };
+  const c = await getJson<Partial<AppConfig>>("/api/config");
+  return { ai: Boolean(c?.ai), store: Boolean(c?.store) };
 }
 
 /** 한국 시간 오늘 YYYY-MM-DD */

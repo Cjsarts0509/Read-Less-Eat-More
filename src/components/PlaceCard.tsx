@@ -1,15 +1,20 @@
 import { CATEGORY_BY_KEY } from "../../shared/categories";
 import { BADGE_META, isNewlyListed, LUNCH_LABEL } from "../../shared/insights";
 import type { Place } from "../../shared/types";
+import type { MenuReport } from "../../shared/api";
 import { bookTitleOf } from "../lib/booktitle";
 import { badgesOf, type Ctx } from "../lib/filters";
 import { directionsUrl, kakaoPlaceUrl, naverMapUrl } from "../lib/links";
+import { ClosureNotice, MenuReports, PlaceSignals, WebInfoBox } from "./PlaceExtras";
 
 interface Props {
   place: Place;
   ctx: Ctx;
   highlighted?: boolean;
   onShowOnMap?: (id: string) => void;
+  menus?: MenuReport[];
+  /** 메뉴판 사진 올리기 (저장소 · AI 가 켜져 있을 때) */
+  upload?: { branch: string; onDone: () => void } | null;
 }
 
 const fmt = new Intl.NumberFormat("ko-KR");
@@ -72,7 +77,7 @@ export function PlaceLinks({ place, onShowOnMap }: { place: Place; onShowOnMap?:
   );
 }
 
-export function PlaceCard({ place, ctx, highlighted, onShowOnMap }: Props) {
+export function PlaceCard({ place, ctx, highlighted, onShowOnMap, menus, upload }: Props) {
   const cat = CATEGORY_BY_KEY[place.category];
   const ai = place.ai;
   const g = place.google;
@@ -87,6 +92,7 @@ export function PlaceCard({ place, ctx, highlighted, onShowOnMap }: Props) {
         </span>
       </header>
 
+      <ClosureNotice place={place} ctx={ctx} />
       <p className="card__book">《{bookTitleOf(place)}》</p>
       <h3 className="card__name">{place.name}</h3>
       <Badges place={place} ctx={ctx} />
@@ -125,8 +131,17 @@ export function PlaceCard({ place, ctx, highlighted, onShowOnMap }: Props) {
         )}
       </dl>
 
+      <PlaceSignals place={place} />
       <LunchLine place={place} />
       {ai?.lunchNote && place.lunchReason !== ai.lunchNote && <p className="card__note">💡 {ai.lunchNote}</p>}
+      <WebInfoBox place={place} />
+      <MenuReports
+        place={place}
+        reports={menus}
+        branch={upload?.branch ?? ""}
+        canUpload={Boolean(upload) && !place.id.startsWith("demo-")}
+        onUploaded={() => upload?.onDone()}
+      />
 
       {ai?.tags.length ? (
         <ul className="tags">

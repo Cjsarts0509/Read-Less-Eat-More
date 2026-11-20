@@ -19,6 +19,7 @@ jobs:
     env:
       HAS_CF: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
       HAS_AI: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+      HAS_SB: ${{ secrets.SUPABASE_SECRET_KEY != '' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -51,3 +52,11 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      - name: Supabase 키를 워커 시크릿으로 동기화
+        if: env.HAS_CF == 'true' && env.HAS_SB == 'true'
+        run: printf '%s' "$SUPABASE_SECRET_KEY" | npx wrangler secret put SUPABASE_SECRET_KEY
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}

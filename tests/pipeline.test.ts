@@ -6,6 +6,15 @@ import { areaHint, buildQuery, cleanText, toIsoDate } from "../pipeline/sources/
 import { sanitizeInsight, supportsServerFallback, type Analyzer, type PlaceInsight } from "../pipeline/sources/claude";
 import { normalizeName } from "../pipeline/sources/google";
 
+/** 새로 생긴 분석 필드의 기본값 (테스트용) */
+const EXTRA = {
+  closure: { state: "open" as const, note: null, evidenceDate: null },
+  waiting: { level: "unknown" as const, bestTime: null, note: null },
+  pace: "unknown" as const,
+  sponsoredPosts: 0,
+  prices: [] as Array<{ item: string; price: number; date: string | null }>,
+};
+
 const branch: Branch = {
   code: "001",
   name: "광화문",
@@ -87,6 +96,7 @@ describe("Claude 출력 정리", () => {
         { type: "new_menu", label: "날짜 없음", detail: "", evidenceDate: null },
         { type: "lunch_special", label: "런치 9,900원", detail: "", evidenceDate: null },
       ],
+      ...EXTRA,
     };
     const out = sanitizeInsight(raw);
     expect(out.bookTitle).toBe("맑은 뚝배기의 고독");
@@ -128,6 +138,9 @@ describe("collectBranch", () => {
               lunchNote: null,
               tags: ["혼밥"],
               badges: [{ type: "new_open", label: "11월 오픈", detail: "오픈 후기", evidenceDate: "2026-11-15" }],
+              ...EXTRA,
+              sponsoredPosts: 1,
+              prices: [{ item: "국밥", price: 10000, date: "2026-11-15" }],
             } satisfies PlaceInsight,
           ]),
         );
@@ -162,6 +175,9 @@ describe("collectBranch", () => {
     expect(a.naver?.query).toBe("가까운 국밥 종로1가");
     expect(a.ai?.summary).toBe("가까운 국밥 요약");
     expect(a.ai?.bookTitle).toBe("국밥의 고독");
+    expect(a.ai?.adRatio).toBe(1); // 글 1개 중 협찬 1개
+    expect(a.priceHistory?.[0]).toMatchObject({ item: "국밥", price: 10000, source: "blog" });
+    expect(a.naver?.sponsoredHint).toBe(0);
     expect(a.ai?.sourceLatestPost).toBe("2026-11-15");
     expect(a.lunch).toBe("likely");
     expect(a.firstSeen).toBe(today);
@@ -235,8 +251,9 @@ describe("createClaudeAnalyzer (가짜 API 응답)", () => {
             lunchNote: null,
             tags: ["혼밥"],
             badges: [{ type: "event", label: "리뷰 이벤트", detail: "음료 증정", evidenceDate: "2026-11-10" }],
+            ...EXTRA,
           },
-          { id: "zzz", bookTitle: "", summary: "입력에 없던 id", signatureMenus: [], priceHint: null, lunch: "unknown", lunchNote: null, tags: [], badges: [] },
+          { id: "zzz", bookTitle: "", summary: "입력에 없던 id", signatureMenus: [], priceHint: null, lunch: "unknown", lunchNote: null, tags: [], badges: [], ...EXTRA },
         ],
       };
       return new Response(

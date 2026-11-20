@@ -12,6 +12,7 @@
  *   BRANCHES                쉼표로 지점 코드 제한 (전체)
  *   RADIUS_M (1000) · MAX_PLACES_PER_BRANCH (400) · NAVER_REFRESH_DAYS (3) · NAVER_DAILY_BUDGET (20000)
  *   AI_MAX_PLACES_PER_RUN (300) · AI_BATCH_SIZE (8) · GOOGLE_MAX_PER_BRANCH (0) · GOOGLE_REFRESH_DAYS (30)
+ *   WEB_SEARCH_MAX_PER_RUN (20) — 블로그 글이 거의 없는 가게를 Claude 웹 검색으로 보강 (0 이면 끔)
  */
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -22,6 +23,7 @@ import { createClaudeAnalyzer } from "./sources/claude";
 import { lookupGoogle } from "./sources/google";
 import { collectNearby } from "./sources/kakao";
 import { searchBlog } from "./sources/naver";
+import { createWebSearcher } from "./sources/websearch";
 
 const DATA_DIR = path.resolve("public/data");
 
@@ -70,6 +72,8 @@ async function main() {
   const now = new Date();
   const today = todayKst(now);
   let kakaoCalls = 0;
+  const webSearch = anthropicKey ? createWebSearcher({ apiKey: anthropicKey, model: process.env.CLAUDE_MODEL }) : null;
+  const regionCity = new Map<string, string>();
 
   const deps: Deps = {
     today,
@@ -79,6 +83,7 @@ async function main() {
     naver: naverId && naverSecret ? (q) => searchBlog(q, { clientId: naverId, clientSecret: naverSecret }) : null,
     google: googleKey ? (p) => lookupGoogle(p, googleKey, today) : null,
     analyzer: anthropicKey ? createClaudeAnalyzer({ apiKey: anthropicKey, model: process.env.CLAUDE_MODEL }) : null,
+    web: webSearch ? (p) => webSearch(p, today, regionCity.get(p.id)) : null,
     log: (m) => console.log(m),
   };
 
@@ -104,6 +109,7 @@ async function main() {
     naver: envInt("NAVER_DAILY_BUDGET", 20000),
     google: envInt("GOOGLE_DAILY_BUDGET", 2000),
     ai: envInt("AI_MAX_PLACES_PER_RUN", 300),
+    web: anthropicKey ? envInt("WEB_SEARCH_MAX_PER_RUN", 20) : 0,
   };
   const remaining = { ...total };
 
@@ -119,16 +125,18 @@ async function main() {
       naver: Math.ceil(remaining.naver / left),
       google: Math.ceil(remaining.google / left),
       ai: Math.ceil(remaining.ai / left),
+      web: Math.ceil((remaining.web ?? 0) / left),
     };
     const before = { ...share };
     const file = path.join(DATA_DIR, "places", `${branch.code}.json`);
     const prev = await readJson<BranchPlaces>(file);
+    for (const p of prev?.places ?? []) regionCity.set(p.id, branch.region);
     try {
       const { data, stats } = await collectBranch(branch, prev, cfg, deps, share);
       await writeFile(file, serializeBranchPlaces(data), "utf8");
       index.branches[branch.code] = { updatedAt: data.generatedAt, count: data.places.length };
       console.log(
-        `✅ ${branch.label.padEnd(8)} 카카오 ${stats.kakao} → ${stats.kept}곳 · 네이버 ${stats.naverCalls} · Google ${stats.googleCalls} · AI ${stats.aiAnalyzed}${stats.aiPending ? ` (대기 ${stats.aiPending})` : ""}${stats.errors ? ` · 오류 ${stats.errors}` : ""}`,
+        `✅ ${branch.label.padEnd(8)} 카카오 ${stats.kakao} → ${stats.kept}곳 · 네이버 ${stats.naverCalls} · Google ${stats.googleCalls} · AI ${stats.aiAnalyzed}${stats.aiPending ? ` (대기 ${stats.aiPending})` : ""} · 웹 ${stats.webChecked}${stats.errors ? ` · 오류 ${stats.errors}` : ""}`,
       );
     } catch (err) {
       failures++;
@@ -137,13 +145,14 @@ async function main() {
     remaining.naver -= before.naver - share.naver;
     remaining.google -= before.google - share.google;
     remaining.ai -= before.ai - share.ai;
+    remaining.web = (remaining.web ?? 0) - ((before.web ?? 0) - (share.web ?? 0));
   }
 
   index.generatedAt = now.toISOString();
   index.baselineDate ??= today;
   await writeFile(indexFile, JSON.stringify(index, null, 2) + "\n", "utf8");
   console.log(
-    `\n카카오 요청 ${kakaoCalls}회 · 네이버 ${total.naver - remaining.naver}회 · AI 분석 ${total.ai - remaining.ai}곳 · 실패 지점 ${failures}`,
+    `\n카카오 요청 ${kakaoCalls}회 · 네이버 ${total.naver - remaining.naver}회 · AI 분석 ${total.ai - remaining.ai}곳 · 웹 검색 ${(total.web ?? 0) - (remaining.web ?? 0)}곳 · 실패 지점 ${failures}`,
   );
   if (failures === branches.length && branches.length > 0) process.exit(1);
 }

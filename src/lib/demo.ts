@@ -3,7 +3,7 @@
  * API 키를 넣기 전에도 화면 구성을 확인할 수 있게 하려는 용도.
  */
 import { walkMinutes } from "../../shared/geo";
-import { computeLunch } from "../../shared/insights";
+import { computeLunch, computePriceChange } from "../../shared/insights";
 import type { Badge, Branch, BranchPlaces, CategoryKey, Place } from "../../shared/types";
 import { hashString, mulberry32 } from "./random";
 
@@ -95,14 +95,49 @@ export function makeDemoPlaces(branch: Branch, today = new Date().toISOString().
         lunch: category === "pub" ? "no" : "yes",
         lunchNote: LUNCH_NOTES[Math.floor(rng() * LUNCH_NOTES.length)] ?? null,
         tags: TAGS.filter(() => rng() < 0.3).slice(0, 3),
+        waiting: [
+          { level: "none" as const, bestTime: null, note: null },
+          { level: "short" as const, bestTime: "11:50 전", note: "12시 넘으면 10분 대기 (샘플)" },
+          { level: "long" as const, bestTime: "11:40 전", note: "줄이 길어요 (샘플)" },
+          { level: "unknown" as const, bestTime: null, note: null },
+        ][Math.floor(rng() * 4)],
+        pace: (["fast", "normal", "slow", "unknown"] as const)[Math.floor(rng() * 4)],
+        adRatio: Math.round(rng() ** 2 * 10) / 10,
+        closure:
+          i === 11
+            ? { state: "closed" as const, note: "11월 초 폐업했다는 글 (샘플)", evidenceDate: daysAgo(10) }
+            : i === 23
+              ? { state: "moved" as const, note: "건너편 건물 2층으로 이전 (샘플)", evidenceDate: daysAgo(20) }
+              : { state: "open" as const, note: null, evidenceDate: null },
         analyzedAt: today,
         model: "demo",
         sourceLatestPost: today,
       },
       lunch: "unknown",
       lunchReason: "",
+      priceHistory:
+        i % 5 === 2
+          ? [
+              { item: menus[0]!, price: 10000, date: daysAgo(6), source: "blog" },
+              { item: menus[0]!, price: 9000, date: daysAgo(80), source: "blog" },
+            ]
+          : undefined,
+      web:
+        i % 13 === 7
+          ? {
+              summary: "지난달 문을 연 작은 가게 (샘플 웹 정보)",
+              openedOn: daysAgo(35).slice(0, 7),
+              hours: "11:00-21:00",
+              lunch: "yes",
+              closure: "open",
+              menus: [],
+              sources: [{ title: "샘플 출처", url: "https://example.com" }],
+              checkedAt: today,
+            }
+          : null,
     };
-    const lunch = computeLunch(place);
+    place.priceChange = computePriceChange(place.priceHistory);
+    const lunch = computeLunch(place, today);
     place.lunch = lunch.status;
     place.lunchReason = lunch.reason;
     places.push(place);

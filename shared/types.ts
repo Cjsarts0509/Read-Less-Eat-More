@@ -66,6 +66,8 @@ export interface BlogPost {
 export interface NaverInfo {
   /** 네이버 블로그 검색 결과 수 (가게 이름 + 동네) */
   blogTotal: number;
+  /** 최신 글 중 협찬 · 체험단 표현이 보이는 글 수 (키워드 기준) */
+  sponsoredHint?: number;
   /** 최근 30일 안에 올라온 글 수 (최신 10개 기준) */
   recentPosts: number;
   latestPostDate: string | null;
@@ -85,6 +87,28 @@ export interface GoogleInfo {
   checkedAt: string;
 }
 
+export type ClosureState = "open" | "closed" | "moved" | "temporarily_closed" | "unknown";
+export type WaitLevel = "none" | "short" | "long" | "unknown";
+export type Pace = "fast" | "normal" | "slow" | "unknown";
+
+export interface PricePoint {
+  item: string;
+  price: number;
+  date: string | null;
+  source: "blog" | "photo" | "web";
+}
+
+export interface WebInfo {
+  summary: string | null;
+  openedOn: string | null;
+  hours: string | null;
+  lunch: "yes" | "no" | "unknown";
+  closure: ClosureState;
+  menus: string[];
+  sources: Array<{ title: string; url: string }>;
+  checkedAt: string;
+}
+
 export interface AiInsight {
   /** 가게를 책 제목처럼 패러디한 제목 (예: "맑은 뚝배기의 고독") */
   bookTitle?: string;
@@ -95,6 +119,14 @@ export interface AiInsight {
   lunch: "yes" | "no" | "unknown";
   lunchNote: string | null;
   tags: string[];
+  /** 폐업 · 이전 · 휴업 단서 */
+  closure?: { state: ClosureState; note: string | null; evidenceDate: string | null };
+  /** 웨이팅 */
+  waiting?: { level: WaitLevel; bestTime: string | null; note: string | null };
+  /** 식사 속도 (회전율) */
+  pace?: Pace;
+  /** 분석한 글 중 협찬 · 체험단으로 보이는 글 비율 0~1 */
+  adRatio?: number;
   analyzedAt: string;
   model: string;
   /** 분석에 쓴 블로그 글 중 가장 최근 글 날짜 — 이후 새 글이 쌓이면 다시 분석 */
@@ -124,6 +156,12 @@ export interface Place {
   ai: AiInsight | null;
   lunch: LunchStatus;
   lunchReason: string;
+  /** 블로그 · 사진 · 웹에서 모은 메뉴 가격 기록 */
+  priceHistory?: PricePoint[];
+  /** 최근 가격이 바뀐 메뉴 */
+  priceChange?: { item: string; from: number; to: number; date: string | null } | null;
+  /** 블로그 글이 적은 새 가게를 웹 검색으로 보강한 정보 */
+  web?: WebInfo | null;
   /** AI 예산이 모자라 분석을 미룬 경우 (다음 수집 때 우선 처리) */
   aiPending?: boolean;
 }

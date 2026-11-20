@@ -1,4 +1,5 @@
 import { activeBadges, isLunchFriendly, isNewlyListed } from "../../shared/insights";
+import { estimateLunchTime } from "../../shared/time";
 import type { BadgeType, CategoryKey, Place } from "../../shared/types";
 
 export type SortKey = "distance" | "popular" | "buzz" | "rating" | "news";
@@ -21,13 +22,15 @@ export const NEWS_FILTERS: Array<{ key: NewsFilter; label: string; types: BadgeT
 
 export interface Filters {
   walk: number; // 분, 0 = 전체
+  /** 점심시간 한도 (왕복 + 식사 + 웨이팅, 분). 0 = 제한 없음 */
+  timeBudget: number;
   lunchOnly: boolean;
   sort: SortKey;
   query: string;
   news: NewsFilter[];
 }
 
-export const DEFAULT_FILTERS: Filters = { walk: 10, lunchOnly: true, sort: "distance", query: "", news: [] };
+export const DEFAULT_FILTERS: Filters = { walk: 10, timeBudget: 0, lunchOnly: true, sort: "distance", query: "", news: [] };
 
 export interface Ctx {
   today: string;
@@ -69,6 +72,7 @@ export function applyFilters(places: Place[], f: Filters, ctx: Ctx): Place[] {
   return places.filter(
     (p) =>
       (f.walk === 0 || p.walkMin <= f.walk) &&
+      (!f.timeBudget || estimateLunchTime(p).total <= f.timeBudget) &&
       (!f.lunchOnly || isLunchFriendly(p.lunch)) &&
       matchesNews(p, f.news, ctx) &&
       matchesQuery(p, f.query.trim()),

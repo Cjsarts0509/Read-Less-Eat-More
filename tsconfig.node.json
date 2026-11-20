@@ -1,8 +1,22 @@
 {
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "lib": ["ES2023", "DOM"],
-    "types": ["node"]
+    "lib": [
+      "ES2023",
+      "DOM"
+    ],
+    "types": [
+      "node"
+    ]
   },
-  "include": ["pipeline", "shared", "tests", "vite.config.ts", "vitest.config.ts"]
+  "include": [
+    "pipeline",
+    "shared",
+    "tests",
+    "vite.config.ts",
+    "vitest.config.ts"
+  ],
+  "exclude": [
+    "tests/worker.test.ts"
+  ]
 }

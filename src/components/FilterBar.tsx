@@ -3,6 +3,13 @@ import type { CategoryKey } from "../../shared/types";
 import { NEWS_FILTERS, type Filters, type NewsFilter } from "../lib/filters";
 import { sfx } from "../lib/sfx";
 
+const BUDGETS = [
+  { v: 0, label: "제한 없음" },
+  { v: 40, label: "40분" },
+  { v: 60, label: "1시간" },
+  { v: 90, label: "1시간 반" },
+];
+
 const WALKS = [
   { v: 5, label: "5분" },
   { v: 10, label: "10분" },
@@ -39,6 +46,22 @@ export function FilterBar({ filters, onChange }: Props) {
               onClick={() => set("walk", w.v)}
             >
               {w.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="seg" role="radiogroup" aria-label="점심시간 한도 (왕복 + 식사 + 웨이팅)">
+          <span className="seg__label" title="왕복 걷는 시간 + 식사 + 웨이팅">⏱ 점심시간</span>
+          {BUDGETS.map((b) => (
+            <button
+              type="button"
+              key={b.v}
+              role="radio"
+              aria-checked={filters.timeBudget === b.v}
+              className={`seg__btn${filters.timeBudget === b.v ? " seg__btn--on" : ""}`}
+              onClick={() => set("timeBudget", b.v)}
+            >
+              {b.label}
             </button>
           ))}
         </div>

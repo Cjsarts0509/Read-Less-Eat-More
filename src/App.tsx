@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CATEGORY_BY_KEY } from "../shared/categories";
 import type { Branch, BranchPlaces, CategoryKey, DataIndex } from "../shared/types";
-import { AskAI } from "./components/AskAI";
+import type { MenuReport, WeatherResponse } from "../shared/api";
 import { BookShelf } from "./components/BookShelf";
 import { BranchMap } from "./components/BranchMap";
 import { CategoryTabs, FilterBar } from "./components/FilterBar";
 import { PlaceCard } from "./components/PlaceCard";
+import { LibrarianChat } from "./components/LibrarianChat";
 import { PublishStage } from "./components/PublishStage";
+import { RoomPage } from "./components/RoomPage";
+import { WeatherBand } from "./components/WeatherBand";
+import { createRoom, fetchMenus, fetchWeather } from "./lib/api";
 import { loadBranches, loadConfig, loadIndex, loadPlaces, todayKst, type AppConfig } from "./lib/data";
 import { applyFilters, countByCategory, DEFAULT_FILTERS, SORT_LABEL, sortPlaces, type Ctx, type Filters, type SortKey } from "./lib/filters";
 import { sfx } from "./lib/sfx";
@@ -18,6 +22,20 @@ type PlacesState = { status: "idle" } | { status: "loading" } | { status: "missi
 const PAGE = 48;
 const params = new URLSearchParams(window.location.search);
 const DEMO = params.has("demo");
+const ROOM = (params.get("room") ?? "").toUpperCase();
+
+const DEMO_WEATHER: WeatherResponse = {
+  available: true,
+  day: "",
+  tmin: 3,
+  tmax: 8,
+  sky: "흐림",
+  precip: "비",
+  pop: 70,
+  mood: "rain",
+  line: "☔ (샘플) 비 소식 — 가까운 국물 서가부터 펼쳐 둘게요",
+  boost: { keywords: ["국밥", "탕", "찌개", "칼국수", "짬뽕", "라멘", "우동", "샤브"], maxWalk: 7, label: "비 오는 날" },
+};
 
 const TICKER = [
   "📚 사람은 책을 만들고, 점심은 사람을 만든다",
@@ -55,7 +73,10 @@ function Marquee() {
 export function App() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [index, setIndex] = useState<DataIndex | null>(null);
-  const [config, setConfig] = useState<AppConfig>({ ai: false });
+  const [config, setConfig] = useState<AppConfig>({ ai: false, store: false });
+  const [weather, setWeather] = useState<WeatherResponse | null>(null);
+  const [weatherOn, setWeatherOn] = useState<boolean>(() => readStore("lmp:weatherOn", true));
+  const [menus, setMenus] = useState<Record<string, MenuReport[]>>({});
   const [selectedCode, setSelectedCode] = useState<string | null>(() => params.get("b") ?? readStore<string | null>("rlem:branch", null));
   const [pickView, setPickView] = useState<PickView>(() => readStore<PickView>("rlem:pickView", "shelf"));
   const [places, setPlaces] = useState<PlacesState>({ status: "idle" });
@@ -91,6 +112,28 @@ export function App() {
   }, [selectedCode]);
 
   useEffect(() => writeStore("rlem:pickView", pickView), [pickView]);
+  useEffect(() => writeStore("lmp:weatherOn", weatherOn), [weatherOn]);
+
+  // 날씨 띠지 · 직원이 올린 메뉴판
+  useEffect(() => {
+    setWeather(null);
+    setMenus({});
+    if (!selected) return;
+    if (DEMO) {
+      setWeather(DEMO_WEATHER);
+      return;
+    }
+    let alive = true;
+    void fetchWeather(selected.code).then((w) => alive && setWeather(w));
+    return () => {
+      alive = false;
+    };
+  }, [selected]);
+
+  const refreshMenus = useCallback(() => {
+    if (selected && config.store && !DEMO) void fetchMenus(selected.code).then(setMenus);
+  }, [selected, config.store]);
+  useEffect(refreshMenus, [refreshMenus]);
   useEffect(() => {
     const { walk, lunchOnly, sort } = filters;
     writeStore("rlem:filters", { walk, lunchOnly, sort });
@@ -163,6 +206,19 @@ export function App() {
   const poolDesc = `${filters.walk ? `도보 ${filters.walk}분` : "반경 전체"} · ${tabLabel}${filters.lunchOnly ? " · 점심 영업" : ""}`;
   const branchInfo = selected ? index?.branches[selected.code] : undefined;
   const sorts = (Object.keys(SORT_LABEL) as SortKey[]).filter((s) => s !== "rating" || hasRating);
+  const weatherText = weather?.available ? `${weather.precip || weather.sky} · ${weather.tmin}~${weather.tmax}℃ · 강수확률 ${weather.pop ?? "?"}%` : undefined;
+  const canRoom = config.store && config.ai && !DEMO;
+  const upload = config.store && config.ai && !DEMO && selected ? { branch: selected.code, onDone: refreshMenus } : null;
+
+  const openRoom = async () => {
+    if (!selected) return;
+    try {
+      const { code } = await createRoom(selected.code, `${selected.label} 점심`);
+      window.location.href = `/?room=${code}`;
+    } catch (err) {
+      showToast((err as Error).message, "⚠️");
+    }
+  };
 
   return (
     <div className="app">
@@ -224,12 +280,16 @@ export function App() {
           </div>
         </header>
 
-        {DEMO && (
+        {ROOM && <RoomPage code={ROOM} branches={branches} onToast={showToast} />}
+
+        {!ROOM && DEMO && (
           <div className="banner" role="note">
             <b>샘플 화면</b> — 실제 식당이 아닌 예시 데이터예요. <a href={window.location.pathname}>실제 데이터 보기</a>
           </div>
         )}
 
+        {!ROOM && (
+        <>
         {/* STEP 01 지점 책장 */}
         <section className="panel" aria-labelledby="s1">
           <div className="step-row">
@@ -309,6 +369,8 @@ export function App() {
               <FilterBar filters={filters} onChange={setFilters} />
             </section>
 
+            <WeatherBand weather={weather} branchLabel={selected.label} on={weatherOn} onToggle={setWeatherOn} />
+
             {/* STEP 03 편찬 */}
             <PublishStage
               key={selected.code}
@@ -319,11 +381,19 @@ export function App() {
               poolDesc={poolDesc}
               onShowOnMap={showOnMap}
               onToast={showToast}
+              weather={weatherOn ? weather : null}
+              onOpenRoom={canRoom ? openRoom : null}
             />
 
             {config.ai && !DEMO && (
               <div className="panel">
-                <AskAI branch={selected} candidates={sorted.length ? sorted : all} onShowOnMap={showOnMap} />
+                <LibrarianChat
+                  branch={selected}
+                  candidates={sorted.length ? sorted : all}
+                  weatherText={weatherText}
+                  timeBudget={filters.timeBudget}
+                  onShowOnMap={showOnMap}
+                />
               </div>
             )}
 
@@ -375,7 +445,15 @@ export function App() {
               ) : (
                 <div className="grid">
                   {sorted.slice(0, visible).map((p) => (
-                    <PlaceCard key={p.id} place={p} ctx={ctx} highlighted={highlight === p.id} onShowOnMap={showOnMap} />
+                    <PlaceCard
+                      key={p.id}
+                      place={p}
+                      ctx={ctx}
+                      highlighted={highlight === p.id}
+                      onShowOnMap={showOnMap}
+                      menus={menus[p.id]}
+                      upload={upload}
+                    />
                   ))}
                 </div>
               )}
@@ -386,6 +464,8 @@ export function App() {
               )}
             </section>
           </>
+        )}
+        </>
         )}
 
         <footer className="footer">

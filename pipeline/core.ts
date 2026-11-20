@@ -6,8 +6,8 @@
  */
 import { categorize } from "../shared/categories";
 import { haversine, walkMinutes } from "../shared/geo";
-import { computeLunch, daysBetween } from "../shared/insights";
-import type { Branch, BranchPlaces, GoogleInfo, Place } from "../shared/types";
+import { computeLunch, computePriceChange, daysBetween, mergePriceHistory, SPONSORED_RE } from "../shared/insights";
+import type { Branch, BranchPlaces, GoogleInfo, Place, WebInfo } from "../shared/types";
 import { mapLimit } from "./http";
 import type { KakaoPlace } from "./sources/kakao";
 import type { BlogSearchResult } from "./sources/naver";
@@ -22,6 +22,9 @@ export interface CollectConfig {
   googleRefreshDays: number;
   aiBatchSize: number;
   aiConcurrency: number;
+  /** 웹 검색으로 보강할 블로그 글 수 기준 (이하) */
+  webMaxBlogTotal: number;
+  webRefreshDays: number;
 }
 
 export const DEFAULT_CONFIG: CollectConfig = {
@@ -32,6 +35,8 @@ export const DEFAULT_CONFIG: CollectConfig = {
   googleRefreshDays: 30,
   aiBatchSize: 8,
   aiConcurrency: 2,
+  webMaxBlogTotal: 3,
+  webRefreshDays: 30,
 };
 
 export interface Deps {
@@ -41,6 +46,8 @@ export interface Deps {
   naver: ((query: string) => Promise<BlogSearchResult>) | null;
   google: ((place: Place) => Promise<GoogleInfo | null>) | null;
   analyzer: Analyzer | null;
+  /** 블로그 글이 적은 가게를 웹 검색으로 보강 (선택) */
+  web?: ((place: Place) => Promise<WebInfo | null>) | null;
   log?: (msg: string) => void;
 }
 
@@ -48,6 +55,7 @@ export interface Budget {
   naver: number;
   google: number;
   ai: number;
+  web?: number;
 }
 
 export interface BranchStats {
@@ -57,11 +65,12 @@ export interface BranchStats {
   googleCalls: number;
   aiAnalyzed: number;
   aiPending: number;
+  webChecked: number;
   errors: number;
 }
 
 /** 새 글 중 이 단어가 있으면 바로 다시 분석한다 */
-const NEWS_KEYWORDS = /오픈|신메뉴|새 메뉴|이벤트|행사|할인|시즌|한정|출시|개시|런치|점심\s?특선|리뉴얼|증정|기념|신상/;
+const NEWS_KEYWORDS = /오픈|신메뉴|새 메뉴|이벤트|행사|할인|시즌|한정|출시|개시|런치|점심\s?특선|리뉴얼|증정|기념|신상|폐업|이전|휴업|가격|인상|웨이팅|줄 서/;
 
 export function needsAnalysis(place: Place, posts: BlogSearchResult["posts"], today: string): boolean {
   if (posts.length === 0) return false;
@@ -96,6 +105,9 @@ export function toPlace(doc: KakaoPlace, branch: Branch, prev: Place | undefined
     ai: prev?.ai ?? null,
     lunch: "unknown",
     lunchReason: "",
+    priceHistory: prev?.priceHistory,
+    priceChange: prev?.priceChange ?? null,
+    web: prev?.web ?? null,
     aiPending: prev?.aiPending || undefined,
   };
 }
@@ -113,7 +125,7 @@ export async function collectBranch(
 ): Promise<{ data: BranchPlaces; stats: BranchStats }> {
   const log = deps.log ?? (() => {});
   const { today } = deps;
-  const stats: BranchStats = { kakao: 0, kept: 0, naverCalls: 0, googleCalls: 0, aiAnalyzed: 0, aiPending: 0, errors: 0 };
+  const stats: BranchStats = { kakao: 0, kept: 0, naverCalls: 0, googleCalls: 0, aiAnalyzed: 0, aiPending: 0, webChecked: 0, errors: 0 };
   const prevMap = new Map((prev?.places ?? []).map((p) => [p.id, p]));
 
   // 1) 카카오: 반경 안 음식점
@@ -146,6 +158,7 @@ export async function collectBranch(
         const recent = res.posts.filter((post) => post.date && daysBetween(post.date, today) <= 30).length;
         p.naver = {
           blogTotal: res.total,
+          sponsoredHint: res.posts.filter((post) => SPONSORED_RE.test(`${post.title} ${post.snippet}`)).length,
           recentPosts: recent,
           latestPostDate: res.posts.find((post) => post.date)?.date ?? null,
           posts: res.posts.slice(0, 3).map(({ title, link, date }) => ({ title, link, date })),
@@ -220,6 +233,11 @@ export async function collectBranch(
             continue;
           }
           const posts = freshPosts.get(p.id) ?? [];
+          const analyzedCount = Math.max(1, inputs.find((x) => x.id === p.id)?.posts.length ?? posts.length);
+          p.priceHistory = mergePriceHistory(
+            p.priceHistory,
+            r.prices.map((x) => ({ ...x, source: "blog" as const })),
+          );
           p.ai = {
             bookTitle: r.bookTitle || undefined,
             summary: r.summary,
@@ -229,6 +247,10 @@ export async function collectBranch(
             lunch: r.lunch,
             lunchNote: r.lunchNote,
             tags: r.tags,
+            closure: r.closure,
+            waiting: r.waiting,
+            pace: r.pace,
+            adRatio: Math.round(Math.min(1, r.sponsoredPosts / analyzedCount) * 100) / 100,
             analyzedAt: today,
             model: analyzer.model,
             sourceLatestPost: posts.map((x) => x.date).filter(Boolean).sort().at(-1) ?? null,
@@ -248,9 +270,40 @@ export async function collectBranch(
   }
   stats.aiPending = places.filter((p) => p.aiPending).length;
 
-  // 5) 점심 영업 판정
+  // 5) 웹 검색 보강: 블로그 글이 거의 없는 가게 (새로 생긴 곳 먼저)
+  if (deps.web && (budget.web ?? 0) > 0) {
+    const web = deps.web;
+    const due = places
+      .filter(
+        (p) =>
+          p.category !== "dessert" &&
+          (p.naver?.blogTotal ?? 0) <= cfg.webMaxBlogTotal &&
+          (!p.web || daysBetween(p.web.checkedAt, today) >= cfg.webRefreshDays),
+      )
+      .sort((a, b) => b.firstSeen.localeCompare(a.firstSeen) || a.distance - b.distance);
+    const targets = due.slice(0, Math.max(0, budget.web ?? 0));
+    budget.web = (budget.web ?? 0) - targets.length;
+    await mapLimit(targets, 2, async (p) => {
+      try {
+        stats.webChecked++;
+        const info = await web(p);
+        if (info) {
+          p.web = info;
+          if (info.menus.length && !p.ai?.signatureMenus.length && p.ai) p.ai.signatureMenus = info.menus.slice(0, 3);
+        } else {
+          p.web = { summary: null, openedOn: null, hours: null, lunch: "unknown", closure: "unknown", menus: [], sources: [], checkedAt: today };
+        }
+      } catch (err) {
+        stats.errors++;
+        log(`  웹 검색 실패 ${p.name}: ${(err as Error).message}`);
+      }
+    });
+  }
+
+  // 6) 가격 변동 · 점심 영업 판정
   for (const p of places) {
-    const { status, reason } = computeLunch(p);
+    p.priceChange = computePriceChange(p.priceHistory);
+    const { status, reason } = computeLunch(p, today);
     p.lunch = status;
     p.lunchReason = reason;
   }
@@ -260,6 +313,7 @@ export async function collectBranch(
   if (deps.naver) sources.push("naver-blog");
   if (deps.google && cfg.googleMaxPerBranch > 0) sources.push("google-places");
   if (deps.analyzer) sources.push(`claude:${deps.analyzer.model}`);
+  if (deps.web) sources.push("web-search");
 
   return {
     data: { branch: branch.code, generatedAt: deps.nowIso, radius: cfg.radius, sources, places },

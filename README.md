@@ -10,7 +10,12 @@
   3회 이상 재추첨하면 「변심 반품·교환 불가」 도장이 쾅, 4회차부터는 재추첨 버튼이 세 번 도망감
 - **STEP 04 주변 서가** — 지도(도보 반경) + 식당 카드: Claude 가 지은 패러디 책 제목, 사서 한줄평, 블로그 리뷰 수, 점심 영업 여부, 네이버 지도(평점·리뷰) 바로가기
 - 사내 메신저 초대 문구 복사, 「여기로 대출하기」 기록(최근 간 곳 빼고 뽑기), 오늘의 팀 공통 추천
-- AI 점심 소믈리에: "비 오는 날 뜨끈한 국물, 1만원 이하" 같은 말로 3곳 추천
+- **AI 사서와 대화**: 여러 번 주고받으며 조건(기분 · 남은 시간 · 예산 · 못 먹는 음식)을 좁혀 추천
+- **팀 투표방**: 링크 + 닉네임으로 참여 → 각자 먹고 싶은 것 · 못 먹는 것 · 예산 · 도보 한도 → AI 사서가 3곳 중재 → 투표 → 결정 도장
+- **날씨 띠지**: 기상청 단기예보(Supabase `env_forecast`)로 비 · 한파 · 폭염이면 국물 · 가까운 곳 · 냉면을 우대해서 뽑기
+- **점심시간 맞춤**: 40분 · 1시간 · 1시간 반 안에 다녀올 곳만 (왕복 도보 + 식사 속도 + 웨이팅)
+- **메뉴판 사진**: 직원이 찍어 올리면 Claude 가 메뉴 · 가격을 읽어 카드에 표시 (사진은 비공개 저장)
+- **식당 카드 신호**: 폐업 · 이전 의심, 가격 변동(예: 9,000 → 10,000원), 광고성 리뷰 비율, 웨이팅 예측, 블로그 글이 거의 없는 새 가게는 웹 검색으로 보강
 
 디자인: 에디토리얼 북스토어 네오 브루탈리즘 — 종이 `#FAF8F3`, 딥 그린 `#005B41`, 잉크 보더 `#141414`, 하드 오프셋 그림자, Noto Serif KR / Noto Sans KR.
 
@@ -37,8 +42,9 @@
 | 폴더 | 내용 |
 | --- | --- |
 | `src/` | 화면 (React, Leaflet 지도) |
+| `supabase/` | 투표방 · 메뉴판 제보 테이블 (이미 `Cjs0509arts` 프로젝트에 적용됨) |
 | `docs/` | Claude API 로 더 해 볼 만한 기능 |
-| `worker/` | Cloudflare Worker (`/api/config`, `/api/ask`) |
+| `worker/` | Cloudflare Worker (`/api/config` · `weather` · `chat` · `rooms` · `menu-photo` · `menus`) |
 | `pipeline/` | 데이터 수집 (`collect.ts`), 지점 엑셀 가져오기 (`import-branches.ts`) |
 | `shared/` | 화면·워커·수집이 같이 쓰는 타입과 규칙 (분류, 거리, 점심 판정, 배지 만료) |
 | `public/data/` | `branches.json` (지점 34곳), `index.json`, `places/*.json` (수집 결과) |
@@ -53,6 +59,12 @@
 | 평점 · 방문자 리뷰 | 네이버 지도 링크 | **네이버 플레이스 평점은 공식 API 가 없어** 카드에서 바로 연결 |
 | 점심 영업 | ① Google 영업시간 ② Claude 가 리뷰에서 찾은 점심 영업 근거 ③ 주점 분류는 저녁 위주로 봄 | '점심 영업하는 곳만' 은 점심에 안 열 가능성이 큰 곳과 휴업만 숨김 |
 | 신규 오픈 · 이벤트 · 시즌 메뉴 | Claude 가 최신 블로그 글에서 근거와 날짜를 뽑음 | 근거 날짜가 지나면 화면에서 자동으로 숨김 (이벤트 45일, 신규 오픈 90일 등) |
+| 폐업 · 이전 · 휴업 | Claude 가 최신 글의 단서를 읽음 + 웹 검색 | 폐업 의심은 뽑기에서 빼고 카드에 경고 (1년 넘은 근거는 무시) |
+| 웨이팅 · 식사 속도 | Claude 가 최신 글에서 판단 | 점심시간 맞춤 필터의 소요 시간 계산에 사용 |
+| 가격 변동 | 글 속 1인분 가격을 날짜와 함께 쌓아 비교 | 같은 메뉴가 14일 넘게 앞선 기록과 다르면 표시 |
+| 광고성 리뷰 비율 | 최신 글 중 체험단 · 협찬 글 비율 (Claude, 없으면 키워드) | 40% 이상이면 카드에 표시 |
+| 웹 검색 보강 | 블로그 글 3개 이하인 가게를 Claude 웹 검색으로 | 개업 시기 · 영업시간 · 출처 링크 |
+| 날씨 | 기상청 단기예보 (Supabase `env_forecast`, 지점 좌표 → 기상청 격자) | 지점 · 날짜마다 3시간 캐시 |
 | 지도 신규 등록 | 첫 수집 이후 카카오맵에 새로 보인 가게 | 60일간 NEW 표시 |
 
 ## 시작하기
@@ -64,6 +76,7 @@
 | `KAKAO_REST_API_KEY` | [Kakao Developers](https://developers.kakao.com) → 앱 만들기 → 앱 키의 **REST API 키** (앱 설정에서 「카카오맵」 사용을 켜야 할 수 있음) | ✅ | 무료 한도 안 |
 | `NAVER_CLIENT_ID` / `NAVER_CLIENT_SECRET` | [NAVER Developers](https://developers.naver.com/apps) → 애플리케이션 등록 → 사용 API 「검색」 | 권장 | 무료 (하루 25,000회) |
 | `ANTHROPIC_API_KEY` | [Claude Console](https://platform.claude.com) → API Keys | 권장 | 아래 '비용' 참고 |
+| `SUPABASE_SECRET_KEY` | Supabase `Cjs0509arts` 프로젝트 → Project Settings → API Keys → **Secret keys** 만들기 (`sb_secret_…`) | 투표방 · 메뉴판 · 날씨에 필요 | 무료 한도 안 |
 | `GOOGLE_PLACES_API_KEY` | Google Cloud → Places API (New) | 선택 | 별점·영업시간 필드는 유료 (월 무료 한도 있음) |
 
 ### 2. GitHub 에 등록
@@ -80,6 +93,7 @@
 | `RADIUS_M` | `1000` | 수집 반경 (m) |
 | `MAX_PLACES_PER_BRANCH` | `400` | 지점당 최대 식당 수 (가까운 순) |
 | `GOOGLE_MAX_PER_BRANCH` | `0` | 지점마다 인기 상위 N곳만 Google 조회 (0 = 끔) |
+| `WEB_SEARCH_MAX_PER_RUN` | `20` | 하루에 웹 검색으로 보강할 최대 식당 수 (0 = 끔) |
 
 ### 3. Cloudflare 배포
 
@@ -139,8 +153,23 @@ npm run import:branches -- ~/Downloads/BookGrid_지점주소.xlsx
 - Claude: **새 블로그 글에 이벤트·신메뉴 같은 말이 보일 때만** 다시 분석하고, 하루 최대 `AI_MAX_PLACES_PER_RUN` 곳까지만 분석합니다. 8곳씩 묶어 한 번에 요청합니다.
   - 기본 모델 `claude-opus-5-5` 기준 대략 식당 1곳당 1센트 안팎 → 하루 300곳이면 약 $3
   - `claude-haiku-5-5` 로 바꾸면 수십 배 저렴합니다 (`CLAUDE_MODEL` 변수)
-- AI 소믈리에(`/api/ask`)는 IP 당 1분 10회로 제한되어 있습니다.
+- 웹 검색 보강: 식당당 검색 최대 4회 (검색 1,000회에 $10 + 토큰), 하루 20곳이면 1달러 안팎
+- 사서와 대화 · 투표방 중재 · 메뉴판 사진 · 날씨 한 줄은 쓰는 만큼만 나가고, IP · 기능마다 1분 10회로 제한되어 있습니다.
 - Cloudflare Workers 무료 요금제로 충분합니다.
+
+## Supabase
+
+이미 쓰고 계신 `Cjs0509arts` 프로젝트에 `lunch_` 로 시작하는 테이블 3개와 비공개 버킷 하나를 더했습니다 (`supabase/migrations/`). 다른 테이블은 건드리지 않습니다.
+
+| 이름 | 용도 |
+| --- | --- |
+| `lunch_rooms` | 투표방 (방 코드 · 지점 · 마감 · AI 중재안 · 결정) |
+| `lunch_room_members` | 참여자 닉네임 · 취향 · 표 (로그인 없이 브라우저 키) |
+| `lunch_menu_reports` | 메뉴판 사진에서 읽은 메뉴 · 가격. 가리려면 `status = 'hidden'` |
+| 버킷 `lunch-menus` | 메뉴판 원본 사진 (비공개) |
+| `env_forecast` (기존) | 날씨 띠지가 **읽기만** 함 |
+
+세 테이블 모두 RLS 를 켜고 정책을 두지 않아 브라우저에서는 접근할 수 없고, Worker 가 `SUPABASE_SECRET_KEY` 로만 읽고 씁니다.
 
 ## 한계와 메모
 

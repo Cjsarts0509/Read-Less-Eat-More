@@ -1,7 +1,8 @@
 import confetti from "canvas-confetti";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CATEGORY_BY_KEY } from "../../shared/categories";
-import { BADGE_META, daysBetween, isLunchFriendly } from "../../shared/insights";
+import type { WeatherResponse } from "../../shared/api";
+import { BADGE_META, closureOf, daysBetween, isLunchFriendly } from "../../shared/insights";
 import type { Branch, Place } from "../../shared/types";
 import { bookTitleOf, isbnOf } from "../lib/booktitle";
 import { badgesOf, type Ctx } from "../lib/filters";
@@ -10,6 +11,7 @@ import { hashString, mulberry32, weightedPick } from "../lib/random";
 import { prefersReducedMotion, sfx } from "../lib/sfx";
 import { addHistory, readHistory, readStore, writeStore, type PickRecord } from "../lib/storage";
 import { Badges, LunchLine } from "./PlaceCard";
+import { weatherWeight } from "./WeatherBand";
 
 interface Props {
   branch: Branch;
@@ -19,6 +21,9 @@ interface Props {
   poolDesc: string;
   onShowOnMap: (id: string) => void;
   onToast: (msg: string, icon?: string) => void;
+  weather?: WeatherResponse | null;
+  /** 팀 투표방 열기 (저장소가 연결돼 있을 때) */
+  onOpenRoom?: (() => Promise<void>) | null;
 }
 
 interface Leaf {
@@ -73,7 +78,13 @@ async function copyText(text: string): Promise<boolean> {
   }
 }
 
-export function PublishStage({ branch, pool, allPlaces, ctx, poolDesc, onShowOnMap, onToast }: Props) {
+export function PublishStage({ branch, pool: rawPool, allPlaces, ctx, poolDesc, onShowOnMap, onToast, weather, onOpenRoom }: Props) {
+  // 폐업 · 휴업 단서가 있는 곳은 뽑지 않는다
+  const pool = useMemo(
+    () => rawPool.filter((p) => p.lunch !== "closed" && closureOf(p, ctx.today)?.state !== "closed"),
+    [rawPool, ctx.today],
+  );
+  const [opening, setOpening] = useState(false);
   const [opts, setOpts] = useState(() => readStore("rlem:pickOpts", { skipRecent: true, weighted: false }));
   const [history, setHistory] = useState<PickRecord[]>(() => readHistory(branch.code));
   const [result, setResult] = useState<Place | null>(null);
@@ -153,7 +164,10 @@ export function PublishStage({ branch, pool, allPlaces, ctx, poolDesc, onShowOnM
       if (fresh.length) candidates = fresh;
     }
     if (result && candidates.length > 1) candidates = candidates.filter((p) => p.id !== result.id);
-    const winner = weightedPick(candidates, (p) => (opts.weighted ? 1 + Math.log10(1 + (p.naver?.blogTotal ?? 0)) * 2 : 1));
+    const winner = weightedPick(
+      candidates,
+      (p) => (opts.weighted ? 1 + Math.log10(1 + (p.naver?.blogTotal ?? 0)) * 2 : 1) * weatherWeight(p, weather ?? null),
+    );
     if (!winner) return;
 
     timers.current.forEach((t) => window.clearTimeout(t));
@@ -322,6 +336,24 @@ export function PublishStage({ branch, pool, allPlaces, ctx, poolDesc, onShowOnM
                 <span aria-hidden>🔄</span> {rerollLabel}
               </button>
             </div>
+          )}
+
+          {onOpenRoom && (
+            <button
+              type="button"
+              className="bbtn bbtn--block room-open"
+              disabled={opening}
+              onClick={async () => {
+                setOpening(true);
+                try {
+                  await onOpenRoom();
+                } finally {
+                  setOpening(false);
+                }
+              }}
+            >
+              🗳️ {opening ? "투표방 여는 중…" : "팀 투표방 열기 — 모두의 취향을 AI 사서가 중재"}
+            </button>
           )}
 
           {teamPick && (

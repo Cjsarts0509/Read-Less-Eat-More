@@ -28,6 +28,19 @@ const PlaceInsightSchema = z.object({
       evidenceDate: z.string().nullable(),
     }),
   ),
+  closure: z.object({
+    state: z.enum(["open", "closed", "moved", "temporarily_closed", "unknown"]),
+    note: z.string().nullable(),
+    evidenceDate: z.string().nullable(),
+  }),
+  waiting: z.object({
+    level: z.enum(["none", "short", "long", "unknown"]),
+    bestTime: z.string().nullable(),
+    note: z.string().nullable(),
+  }),
+  pace: z.enum(["fast", "normal", "slow", "unknown"]),
+  sponsoredPosts: z.number().int(),
+  prices: z.array(z.object({ item: z.string(), price: z.number().int(), date: z.string().nullable() })),
 });
 
 export const InsightBatchSchema = z.object({ places: z.array(PlaceInsightSchema) });
@@ -57,7 +70,12 @@ export const SYSTEM_PROMPT = `당신은 회사 근처 점심 식당 정보를 �
   - seasonal_menu: 75일 안의 글에서 계절·기간 한정 메뉴 (예: 굴국밥 개시, 콩국수 시작, 딸기 시즌).
   - new_menu: 60일 안의 글에서 새로 나온 메뉴.
   - lunch_special: 점심 특선·런치 세트가 있다는 내용 (기간 제한 없음).
-  - label 은 12자 이내 (예: "11월 오픈", "굴국밥 개시", "런치 9,900원"), detail 은 40자 이내의 근거 요약.`;
+  - label 은 12자 이내 (예: "11월 오픈", "굴국밥 개시", "런치 9,900원"), detail 은 40자 이내의 근거 요약.
+- closure: 폐업 · 이전 · 휴업 단서. 「폐업했어요」「문 닫았」「이전했습니다」「휴업」「임시 휴무(장기)」 같은 표현이 있으면 closed / moved / temporarily_closed, 최근 글에서 영업 중이면 open, 모르면 unknown. note 는 30자 이내 근거(이전이면 옮긴 곳), evidenceDate 는 근거 글 날짜.
+- waiting: 점심 웨이팅. 없거나 바로 앉았다는 글 → none, 10분 안팎 → short, 20분 이상 · 줄이 길다 → long, 모르면 unknown. bestTime 은 "11:50 전" 처럼 추천 도착 시각, note 는 30자 이내.
+- pace: 식사 속도 · 회전. 주문 즉시 나오고 빨리 먹는 곳(국밥 · 분식 · 덮밥) → fast, 코스 · 화덕 · 오래 걸리는 곳 → slow, 그 밖 normal, 모르면 unknown.
+- sponsoredPosts: 주어진 글 중 체험단 · 협찬 · 원고료 · 제품 제공처럼 광고성으로 보이는 글의 개수 (0 이상, 글 개수 이하).
+- prices: 글에 나온 1인분 메뉴 가격 (예: {"item": "순대국", "price": 10000, "date": "2026-11-02"}). 원 단위 정수, 세트 · 단품 구분이 애매하면 넣지 않음, 최대 5개. date 는 그 글의 날짜.`;
 
 export interface InsightInput {
   id: string;
@@ -106,6 +124,22 @@ export function sanitizeInsight(raw: PlaceInsight): PlaceInsight {
     lunchNote: raw.lunchNote ? clip(raw.lunchNote.trim(), 60) : null,
     tags: raw.tags.map((t) => clip(t.trim(), 10)).filter(Boolean).slice(0, 4),
     badges: badges.slice(0, 4),
+    closure: {
+      state: raw.closure.state,
+      note: raw.closure.note ? clip(raw.closure.note.trim(), 50) : null,
+      evidenceDate: raw.closure.evidenceDate && DATE_RE.test(raw.closure.evidenceDate) ? raw.closure.evidenceDate : null,
+    },
+    waiting: {
+      level: raw.waiting.level,
+      bestTime: raw.waiting.bestTime ? clip(raw.waiting.bestTime.trim(), 16) : null,
+      note: raw.waiting.note ? clip(raw.waiting.note.trim(), 50) : null,
+    },
+    pace: raw.pace,
+    sponsoredPosts: Math.max(0, Math.floor(raw.sponsoredPosts)),
+    prices: raw.prices
+      .filter((p) => p.item.trim() && Number.isFinite(p.price) && p.price >= 1000 && p.price <= 200000)
+      .slice(0, 5)
+      .map((p) => ({ item: clip(p.item.trim(), 20), price: Math.round(p.price), date: p.date && DATE_RE.test(p.date) ? p.date : null })),
   };
 }
 
