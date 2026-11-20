@@ -40,8 +40,12 @@ const ENDPOINTS: Record<Mode, string> = {
 /** 이번 실행에서 인증이 통한 방식 (NAVER_API_MODE=hub|legacy 로 고정할 수도 있다) */
 let workingMode: Mode | null = null;
 
+/** 이번 실행에서 받아 준 최대 글 수 (100 을 거절하면 10 으로 낮춘다) */
+let maxDisplay = 100;
+
 export function resetNaverMode(mode: Mode | null = null): void {
   workingMode = mode;
+  maxDisplay = 100;
 }
 
 function authHeaders(mode: Mode, creds: { clientId: string; clientSecret: string }): Record<string, string> {
@@ -169,7 +173,7 @@ export async function searchBlog(
 
   let lastErr: unknown;
   for (const mode of order) {
-    const display = String(Math.min(100, Math.max(1, opts.display ?? 10)));
+    const display = String(Math.min(maxDisplay, Math.max(1, opts.display ?? 10)));
     const params = new URLSearchParams({ query, display, start: "1", sort: opts.sort ?? "sim" });
     if (mode === "hub") params.set("format", "json");
     try {
@@ -180,6 +184,11 @@ export async function searchBlog(
       return parseBlogResponse(data);
     } catch (err) {
       lastErr = err;
+      // 글 수(display)를 거절하면 10개로 낮춰 다시
+      if (err instanceof HttpError && err.status === 400 && Number(display) > 10) {
+        maxDisplay = 10;
+        return searchBlog(query, creds, fetchImpl, opts);
+      }
       // 인증 · 주소 문제면 다른 방식으로, 그 밖의 오류는 그대로
       if (err instanceof HttpError && [401, 403, 404].includes(err.status) && !workingMode) continue;
       throw err;

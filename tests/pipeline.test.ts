@@ -536,3 +536,20 @@ describe("AI 대기 중인 곳 다시 조회", () => {
     expect(asked).not.toContain('"가게0번집" 종로1가');
   });
 });
+
+describe("네이버 검색 글 수 제한", () => {
+  it("100개를 거절하면 10개로 낮춰 다시 묻는다", async () => {
+    const { searchBlog, resetNaverMode } = await import("../pipeline/sources/naver");
+    resetNaverMode("hub");
+    const asked: string[] = [];
+    const fetchImpl = (async (url: string) => {
+      asked.push(new URL(url).searchParams.get("display")!);
+      if (asked.length === 1) return new Response("bad display", { status: 400 });
+      return new Response(JSON.stringify({ total: 1, items: [] }), { status: 200, headers: { "content-type": "application/json" } });
+    }) as unknown as typeof fetch;
+    const res = await searchBlog("q", { clientId: "a", clientSecret: "b" }, fetchImpl, { display: 100 });
+    expect(res.total).toBe(1);
+    expect(asked).toEqual(["100", "10"]);
+    resetNaverMode();
+  });
+});
