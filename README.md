@@ -184,3 +184,11 @@ npm run import:branches -- ~/Downloads/BookGrid_지점주소.xlsx
 - 블로그 리뷰 수는 「가게 이름 + 동」 검색 결과라 이름이 흔한 가게는 부풀 수 있습니다.
 - AI 요약·배지는 블로그 글을 바탕으로 자동 생성되어 틀릴 수 있습니다.
 - 지도는 OpenStreetMap 타일을 씁니다. 다른 타일을 쓰려면 빌드 시 `VITE_TILE_URL`, `VITE_TILE_ATTRIBUTION` 을 지정하세요.
+
+## 운영 점검 (n8n)
+
+n8n 워크플로 「점심은 사람을 만든다 · 운영 점검」(n8n.cjs0509.xyz)이 맡습니다. 수집 자체는 GitHub Actions 그대로입니다.
+
+- **평일 10:40**: GitHub 수집 기록 · 사이트 `/api/config` · `data/index.json` 날짜를 확인합니다. 문제가 있으면 SMTP 로 메일을 보내고, 오늘 수집이 안 돌았거나 실패했으면 하루 한 번 `collect.yml` 을 다시 실행합니다.
+- **매일 03:30**: Supabase 에서 14일 지난 투표방과 60일 지난 실시간 확인 캐시를 지웁니다.
+- GitHub 호출에는 n8n 의 「GitHub account」 자격 증명을 씁니다. 이 저장소에 Actions 읽기 · 쓰기 권한이 있는 토큰이어야 합니다.
