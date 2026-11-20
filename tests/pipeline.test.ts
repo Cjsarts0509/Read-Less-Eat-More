@@ -289,3 +289,23 @@ describe("createClaudeAnalyzer (가짜 API 응답)", () => {
     expect(String((sent!.body.messages as Array<{ content: string }>)[0]!.content)).toContain("기준일(오늘): 2026-11-20");
   });
 });
+
+describe("카카오 주소 검색 (본사 등 대략 좌표 보정)", () => {
+  it("쉼표 뒤 건물 이름은 떼고 찾는다", async () => {
+    const { geocodeAddress } = await import("../pipeline/sources/kakao");
+    let asked = "";
+    const fetchImpl = async (url: string) => {
+      asked = new URL(url).searchParams.get("query") ?? "";
+      return new Response(JSON.stringify({ documents: [{ address_name: "서울 마포구 상암동", x: "126.889", y: "37.578" }] }));
+    };
+    const geo = await geocodeAddress("k", "서울특별시 마포구 월드컵북로54길 25, 상암DMC푸르지오시티(S-City)", fetchImpl);
+    expect(asked).toBe("서울특별시 마포구 월드컵북로54길 25");
+    expect(geo).toEqual({ lat: 37.578, lng: 126.889 });
+  });
+
+  it("결과가 없으면 null", async () => {
+    const { geocodeAddress } = await import("../pipeline/sources/kakao");
+    const fetchImpl = async () => new Response(JSON.stringify({ documents: [] }));
+    expect(await geocodeAddress("k", "없는 주소", fetchImpl)).toBeNull();
+  });
+});

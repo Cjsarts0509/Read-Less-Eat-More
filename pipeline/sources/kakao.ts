@@ -83,3 +83,25 @@ export async function collectNearby(opts: CollectOptions): Promise<KakaoPlace[]>
   await crawl(boundingRect(center, radius), 0);
   return [...found.values()];
 }
+
+interface KakaoAddressResponse {
+  documents: Array<{ address_name: string; x: string; y: string }>;
+}
+
+/** 주소 → 좌표 (카카오 주소 검색). 쉼표 뒤 건물 이름은 떼고 찾는다 */
+export async function geocodeAddress(
+  apiKey: string,
+  address: string,
+  fetchImpl: FetchLike = fetch,
+): Promise<{ lat: number; lng: number } | null> {
+  const query = address.split(",")[0]!.trim();
+  const params = new URLSearchParams({ query, size: "1" });
+  const data = await fetchJson<KakaoAddressResponse>(fetchImpl, `https://dapi.kakao.com/v2/local/search/address.json?${params}`, {
+    headers: { Authorization: `KakaoAK ${apiKey}` },
+  });
+  const d = data.documents[0];
+  if (!d) return null;
+  const lat = Number(d.y);
+  const lng = Number(d.x);
+  return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+}

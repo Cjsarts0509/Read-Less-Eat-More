@@ -7,12 +7,14 @@
  * 엑셀 원본에는 내부 정보(매출자료 날짜, 비고 등)가 있어 저장소에는 넣지 않고 JSON 만 커밋한다.
  */
 import ExcelJS from "exceljs";
-import { writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Branch } from "../shared/types";
 
 const SHEET_NAME = "지점 주소 (수불처)";
 const OUT = path.resolve("public/data/branches.json");
+/** 엑셀에 없는 지점 (본사 등). 좌표가 대략이면 coordSource "approx" — 수집 때 카카오로 맞춘다 */
+const EXTRA = path.resolve("pipeline/extra-branches.json");
 
 const REGION_PREFIX: Array<[string, string]> = [
   ["서울", "서울"],
@@ -101,8 +103,18 @@ async function main() {
       address,
       lat,
       lng,
+      coordSource: "bookgrid",
     });
   });
+
+  // 엑셀에 없는 지점 붙이기 (이미 카카오로 맞춘 좌표가 branches.json 에 있으면 그대로 쓴다)
+  const extra = JSON.parse(await readFile(EXTRA, "utf8").catch(() => "[]")) as Branch[];
+  const current = JSON.parse(await readFile(OUT, "utf8").catch(() => "[]")) as Branch[];
+  for (const e of extra) {
+    if (branches.some((b) => b.code === e.code)) continue;
+    const known = current.find((b) => b.code === e.code && b.coordSource === "kakao");
+    branches.push(known ? { ...e, lat: known.lat, lng: known.lng, coordSource: "kakao" } : e);
+  }
 
   // '(미지정)' 사업단은 맨 뒤로
   const unassigned = (d: string) => (d.startsWith("(") ? 1 : 0);

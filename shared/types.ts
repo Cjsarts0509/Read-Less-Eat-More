@@ -14,6 +14,8 @@ export interface Branch {
   address: string;
   lat: number;
   lng: number;
+  /** 좌표 출처. "approx" 이면 다음 수집 때 카카오 주소 검색으로 정확한 좌표를 맞춘다 */
+  coordSource?: "bookgrid" | "approx" | "kakao";
 }
 
 export type CategoryKey =

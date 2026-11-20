@@ -21,7 +21,7 @@ import type { Branch, BranchPlaces, DataIndex } from "../shared/types";
 import { collectBranch, DEFAULT_CONFIG, serializeBranchPlaces, type Budget, type CollectConfig, type Deps } from "./core";
 import { createClaudeAnalyzer } from "./sources/claude";
 import { lookupGoogle } from "./sources/google";
-import { collectNearby } from "./sources/kakao";
+import { collectNearby, geocodeAddress } from "./sources/kakao";
 import { searchBlog } from "./sources/naver";
 import { createWebSearcher } from "./sources/websearch";
 
@@ -87,7 +87,26 @@ async function main() {
     log: (m) => console.log(m),
   };
 
-  const allBranches = (await readJson<Branch[]>(path.join(DATA_DIR, "branches.json"))) ?? [];
+  const branchesFile = path.join(DATA_DIR, "branches.json");
+  const allBranches = (await readJson<Branch[]>(branchesFile)) ?? [];
+
+  // 좌표가 대략인 지점(엑셀에 없던 본사 등)은 카카오 주소 검색으로 맞춘다
+  let fixed = 0;
+  for (const b of allBranches.filter((x) => x.coordSource === "approx")) {
+    try {
+      const geo = await geocodeAddress(kakaoKey, b.address);
+      if (geo) {
+        console.log(`📍 ${b.label} 좌표 보정: ${b.lat},${b.lng} → ${geo.lat},${geo.lng}`);
+        Object.assign(b, geo, { coordSource: "kakao" as const });
+        fixed++;
+      } else {
+        console.warn(`⚠️  ${b.label} 주소로 좌표를 찾지 못해 대략 좌표로 수집합니다: ${b.address}`);
+      }
+    } catch (err) {
+      console.warn(`⚠️  ${b.label} 좌표 보정 실패: ${(err as Error).message}`);
+    }
+  }
+  if (fixed) await writeFile(branchesFile, JSON.stringify(allBranches, null, 2) + "\n", "utf8");
   const only = (process.env.BRANCHES ?? "")
     .split(",")
     .map((s) => s.trim())

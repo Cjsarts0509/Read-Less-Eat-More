@@ -1,0 +1,24 @@
+[
+  {
+    "code": "HO1",
+    "name": "상암 본사",
+    "label": "상암 본사",
+    "division": "본사",
+    "region": "서울",
+    "address": "서울특별시 마포구 월드컵북로54길 25, 상암DMC푸르지오시티(S-City)",
+    "lat": 37.5786,
+    "lng": 126.8878,
+    "coordSource": "approx"
+  },
+  {
+    "code": "HO2",
+    "name": "파주 북시티 본사",
+    "label": "북시티 본사",
+    "division": "본사",
+    "region": "경기",
+    "address": "경기도 파주시 문발로 249, 교보문고",
+    "lat": 37.7128,
+    "lng": 126.6854,
+    "coordSource": "approx"
+  }
+]
