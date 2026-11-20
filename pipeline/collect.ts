@@ -14,6 +14,7 @@
  *   AI_MAX_PLACES_PER_RUN (300) · AI_BATCH_SIZE (8) · GOOGLE_MAX_PER_BRANCH (0) · GOOGLE_REFRESH_DAYS (30)
  *   WEB_SEARCH_MAX_PER_RUN (20) — 가까운 가게의 영업시간 · 휴무 · 배달 전용 여부를 Claude 웹 검색으로 조사 (0 이면 끔)
  *   WEB_MODEL               웹 조사에 쓸 모델 (CLAUDE_MODEL 과 같음)
+ *   DAUM_DAILY_BUDGET (10000) — 다음 블로그 · 카페 리뷰 검색 (카카오 키, 0 이면 끔)
  *   DRIVE_RADIUS_M (4000) · MAX_DRIVE_PLACES (150) — 차량 모드용으로 도보 반경 밖 「맛집」 검색 결과를 더 모은다 (0 이면 끔)
  */
 import { mkdir, readFile, writeFile } from "node:fs/promises";
@@ -23,6 +24,7 @@ import type { Branch, BranchPlaces, DataIndex } from "../shared/types";
 import { collectBranch, DEFAULT_CONFIG, serializeBranchPlaces, type Budget, type CollectConfig, type Deps } from "./core";
 import { createClaudeAnalyzer } from "./sources/claude";
 import { lookupGoogle } from "./sources/google";
+import { searchDaum } from "./sources/daum";
 import { collectNearby, geocodeAddress, searchKeywordPlaces } from "./sources/kakao";
 import { searchBlog } from "./sources/naver";
 import { createWebSearcher } from "./sources/websearch";
@@ -92,6 +94,20 @@ async function main() {
     google: googleKey ? (p) => lookupGoogle(p, googleKey, today) : null,
     analyzer: anthropicKey ? createClaudeAnalyzer({ apiKey: anthropicKey, model: process.env.CLAUDE_MODEL }) : null,
     web: webSearch ? (p) => webSearch(p, today, regionCity.get(p.id)) : null,
+    reviewSources: [
+      ...(naverId && naverSecret
+        ? [
+            {
+              key: "naverCafe" as const,
+              pool: "naver" as const,
+              search: (q: string) =>
+                searchBlog(q, { clientId: naverId, clientSecret: naverSecret }, fetch, { kind: "cafe", sort: "sim", display: 30 }),
+            },
+          ]
+        : []),
+      { key: "daumBlog" as const, pool: "daum" as const, search: (q: string) => searchDaum("blog", q, kakaoKey), exclude: /blog\.naver\.com/ },
+      { key: "daumCafe" as const, pool: "daum" as const, search: (q: string) => searchDaum("cafe", q, kakaoKey), exclude: /cafe\.naver\.com/ },
+    ],
     log: (m) => console.log(m),
   };
 
@@ -137,6 +153,7 @@ async function main() {
     google: envInt("GOOGLE_DAILY_BUDGET", 2000),
     ai: envInt("AI_MAX_PLACES_PER_RUN", 300),
     web: anthropicKey ? envInt("WEB_SEARCH_MAX_PER_RUN", 20) : 0,
+    daum: envInt("DAUM_DAILY_BUDGET", 10000),
   };
   const remaining = { ...total };
 
@@ -153,6 +170,7 @@ async function main() {
       google: Math.ceil(remaining.google / left),
       ai: Math.ceil(remaining.ai / left),
       web: Math.ceil((remaining.web ?? 0) / left),
+      daum: Math.ceil((remaining.daum ?? 0) / left),
     };
     const before = { ...share };
     const file = path.join(DATA_DIR, "places", `${branch.code}.json`);
@@ -163,7 +181,7 @@ async function main() {
       await writeFile(file, serializeBranchPlaces(data), "utf8");
       index.branches[branch.code] = { updatedAt: data.generatedAt, count: data.places.length };
       console.log(
-        `✅ ${branch.label.padEnd(8)} 카카오 ${stats.kakao} → ${stats.kept}곳 · 네이버 ${stats.naverCalls} · Google ${stats.googleCalls} · AI ${stats.aiAnalyzed}${stats.aiPending ? ` (대기 ${stats.aiPending})` : ""} · 영업시간 ${stats.hoursFound}/${stats.hoursCalls} · 웹 ${stats.webChecked}${stats.errors ? ` · 오류 ${stats.errors}` : ""}`,
+        `✅ ${branch.label.padEnd(8)} 카카오 ${stats.kakao} → ${stats.kept}곳 · 네이버 ${stats.naverCalls} · Google ${stats.googleCalls} · AI ${stats.aiAnalyzed}${stats.aiPending ? ` (대기 ${stats.aiPending})` : ""} · 영업시간 ${stats.hoursFound}/${stats.hoursCalls} · 다른 리뷰 ${stats.extraCalls} · 웹 ${stats.webChecked}${stats.errors ? ` · 오류 ${stats.errors}` : ""}`,
       );
     } catch (err) {
       failures++;
@@ -173,6 +191,7 @@ async function main() {
     remaining.google -= before.google - share.google;
     remaining.ai -= before.ai - share.ai;
     remaining.web = (remaining.web ?? 0) - ((before.web ?? 0) - (share.web ?? 0));
+    remaining.daum = (remaining.daum ?? 0) - ((before.daum ?? 0) - (share.daum ?? 0));
   }
 
   index.generatedAt = now.toISOString();

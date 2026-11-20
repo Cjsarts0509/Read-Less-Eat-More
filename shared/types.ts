@@ -90,6 +90,22 @@ export interface NaverInfo {
   checkedAt: string;
 }
 
+/** 블로그 말고 다른 곳의 리뷰 한 갈래 */
+export interface ReviewSourceInfo {
+  /** 이 가게 이야기로 보이는 글 수 (어림) */
+  total: number;
+  /** 대표 글 (최대 3) */
+  posts: BlogPost[];
+}
+
+/** 네이버 카페 · 다음(티스토리 · 다음 블로그 · 브런치) · 다음 카페 리뷰 */
+export interface ExtraReviews {
+  naverCafe?: ReviewSourceInfo;
+  daumBlog?: ReviewSourceInfo;
+  daumCafe?: ReviewSourceInfo;
+  checkedAt: string;
+}
+
 export interface GoogleInfo {
   rating: number | null;
   ratingCount: number | null;
@@ -224,6 +240,8 @@ export interface Place {
   aiPending?: boolean;
   /** 블로그 글 낱말로 찾은 새 소식 (AI 분석 전에도 보이도록) */
   autoBadges?: Badge[];
+  /** 블로그 말고 다른 곳의 리뷰 */
+  extraReviews?: ExtraReviews;
 }
 
 export interface BranchPlaces {

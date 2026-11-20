@@ -16,8 +16,9 @@ interface NaverBlogItem {
   title: string;
   link: string;
   description: string;
-  bloggername: string;
-  postdate: string; // yyyymmdd
+  bloggername?: string;
+  /** 블로그만 있다 (카페글에는 없음) */
+  postdate?: string; // yyyymmdd
 }
 
 interface NaverBlogResponse {
@@ -32,9 +33,17 @@ export interface BlogSearchResult {
 
 type Mode = "hub" | "legacy";
 
-const ENDPOINTS: Record<Mode, string> = {
-  hub: "https://naverapihub.apigw.ntruss.com/search/v1/blog",
-  legacy: "https://openapi.naver.com/v1/search/blog.json",
+type Kind = "blog" | "cafe";
+
+const ENDPOINTS: Record<Mode, Record<Kind, string>> = {
+  hub: {
+    blog: "https://naverapihub.apigw.ntruss.com/search/v1/blog",
+    cafe: "https://naverapihub.apigw.ntruss.com/search/v1/cafearticle",
+  },
+  legacy: {
+    blog: "https://openapi.naver.com/v1/search/blog.json",
+    cafe: "https://openapi.naver.com/v1/search/cafearticle.json",
+  },
 };
 
 /** 이번 실행에서 인증이 통한 방식 (NAVER_API_MODE=hub|legacy 로 고정할 수도 있다) */
@@ -156,6 +165,8 @@ export function isRelevantPost(post: { title: string; snippet: string }, q: Pick
 }
 
 export interface SearchOptions {
+  /** blog: 블로그 (기본) · cafe: 카페글 (날짜가 없다) */
+  kind?: Kind;
   /** sim: 정확도순 (기본) · date: 최신순 */
   sort?: "sim" | "date";
   /** 받을 글 수 1~100 */
@@ -177,7 +188,7 @@ export async function searchBlog(
     const params = new URLSearchParams({ query, display, start: "1", sort: opts.sort ?? "sim" });
     if (mode === "hub") params.set("format", "json");
     try {
-      const data = await fetchJson<NaverBlogResponse>(fetchImpl, `${ENDPOINTS[mode]}?${params}`, {
+      const data = await fetchJson<NaverBlogResponse>(fetchImpl, `${ENDPOINTS[mode][opts.kind ?? "blog"]}?${params}`, {
         headers: authHeaders(mode, creds),
       });
       workingMode = mode;

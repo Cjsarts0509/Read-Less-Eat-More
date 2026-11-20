@@ -578,3 +578,60 @@ describe("차량 모드 수집", () => {
     expect(data.places.find((p) => p.id === "f1")!.lastSeen).toBe("2026-11-20");
   });
 });
+
+describe("블로그 말고 다른 리뷰", () => {
+  it("다음 검색 응답을 읽는다", async () => {
+    const { parseDaumResponse } = await import("../pipeline/sources/daum");
+    const r = parseDaumResponse({
+      meta: { total_count: 120 },
+      documents: [{ title: "<b>오늘의식탁</b> 후기", contents: "종로1가 점심", url: "https://x.tistory.com/1", datetime: "2026-11-02T12:00:00.000+09:00" }],
+    });
+    expect(r).toEqual({
+      total: 120,
+      posts: [{ title: "오늘의식탁 후기", link: "https://x.tistory.com/1", date: "2026-11-02", snippet: "종로1가 점심" }],
+    });
+  });
+
+  it("갈래마다 관련 글만 세고, 권한이 없는 갈래는 이번 실행에서 끈다", async () => {
+    const { HttpError } = await import("../pipeline/http");
+    let cafeCalls = 0;
+    const deps: Deps = {
+      today: "2026-11-20",
+      nowIso: "",
+      kakao: async () => [kakaoDoc("a", "오늘의식탁", 0.001), kakaoDoc("b", "내일의식탁", 0.002)],
+      naver: async () => ({ total: 3, posts: [{ title: "종로1가 오늘의식탁", link: "n", date: "2026-11-01", snippet: "" }] }),
+      google: null,
+      analyzer: null,
+      reviewSources: [
+        {
+          key: "naverCafe",
+          pool: "naver",
+          search: async () => {
+            cafeCalls++;
+            return {
+              total: 2,
+              posts: [
+                { title: "오늘의식탁 / 내일의식탁 다녀옴", link: "c1", date: null, snippet: "" },
+                { title: "다른 이야기", link: "c2", date: null, snippet: "" },
+              ],
+            };
+          },
+        },
+        {
+          key: "daumBlog",
+          pool: "daum",
+          exclude: /blog\.naver\.com/,
+          search: async () => {
+            throw new HttpError(403, "forbidden", "");
+          },
+        },
+      ],
+    };
+    const { data } = await collectBranch(branch, null, DEFAULT_CONFIG, deps, { naver: 100, google: 0, ai: 0, daum: 100 });
+    const a = data.places.find((p) => p.id === "a")!;
+    expect(a.extraReviews?.naverCafe).toEqual({ total: 1, posts: [{ title: "오늘의식탁 / 내일의식탁 다녀옴", link: "c1", date: null }] });
+    expect(a.extraReviews?.daumBlog).toBeUndefined();
+    expect(cafeCalls).toBe(2);
+    expect(deps.reviewSources![1]!.off).toBe(true);
+  });
+});

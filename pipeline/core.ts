@@ -17,8 +17,8 @@ import {
   resolveHours,
   SPONSORED_RE,
 } from "../shared/insights";
-import type { Branch, BranchPlaces, GoogleInfo, Place, WebInfo } from "../shared/types";
-import { mapLimit } from "./http";
+import type { Branch, BranchPlaces, ExtraReviews, GoogleInfo, Place, WebInfo } from "../shared/types";
+import { HttpError, mapLimit } from "./http";
 import type { KakaoPlace } from "./sources/kakao";
 import type { BlogSearchResult, SearchOptions } from "./sources/naver";
 import { blogQuery, hoursQuery, isAmbiguousName, isRelevantPost, isStrictRelevantPost, rankReviewPosts } from "./sources/naver";
@@ -51,6 +51,8 @@ export interface CollectConfig {
   driveRadius: number;
   /** 차량 모드로 더 모을 최대 곳 수 */
   maxDrivePlaces: number;
+  /** 카페 · 다음 리뷰를 다시 셀 간격 (일) */
+  extraRefreshDays: number;
   /** 검색에서 이 일수 넘게 안 보인 차량 모드 가게는 뺀다 */
   driveKeepDays: number;
 }
@@ -70,7 +72,20 @@ export const DEFAULT_CONFIG: CollectConfig = {
   driveRadius: 4000,
   maxDrivePlaces: 150,
   driveKeepDays: 30,
+  extraRefreshDays: 7,
 };
+
+/** 블로그 말고 다른 리뷰 갈래 (네이버 카페 · 다음 블로그 · 다음 카페) */
+export interface ReviewSource {
+  key: "naverCafe" | "daumBlog" | "daumCafe";
+  /** 어느 예산에서 쓰나 */
+  pool: "naver" | "daum";
+  search: (query: string) => Promise<BlogSearchResult>;
+  /** 다른 갈래에서 이미 센 글 주소 (예: 다음 검색에 섞인 네이버 블로그) */
+  exclude?: RegExp;
+  /** 인증 오류로 이번 실행에서 끔 */
+  off?: boolean;
+}
 
 export interface Deps {
   today: string;
@@ -83,6 +98,8 @@ export interface Deps {
   analyzer: Analyzer | null;
   /** 블로그 글이 적은 가게를 웹 검색으로 보강 (선택) */
   web?: ((place: Place) => Promise<WebInfo | null>) | null;
+  /** 카페 · 다음 리뷰 (선택) */
+  reviewSources?: ReviewSource[];
   log?: (msg: string) => void;
 }
 
@@ -91,6 +108,8 @@ export interface Budget {
   google: number;
   ai: number;
   web?: number;
+  /** 다음 검색 API 호출 수 */
+  daum?: number;
 }
 
 export interface BranchStats {
@@ -103,6 +122,7 @@ export interface BranchStats {
   webChecked: number;
   hoursCalls: number;
   hoursFound: number;
+  extraCalls: number;
   errors: number;
 }
 
@@ -150,6 +170,7 @@ export function toPlace(doc: KakaoPlace, branch: Branch, prev: Place | undefined
     hoursCheckedAt: prev?.hoursCheckedAt,
     aiPending: prev?.aiPending || undefined,
     autoBadges: prev?.autoBadges,
+    extraReviews: prev?.extraReviews,
   };
 }
 
@@ -176,6 +197,7 @@ export async function collectBranch(
     webChecked: 0,
     hoursCalls: 0,
     hoursFound: 0,
+    extraCalls: 0,
     errors: 0,
   };
   const prevMap = new Map((prev?.places ?? []).map((p) => [p.id, p]));
@@ -332,6 +354,48 @@ export async function collectBranch(
         stats.errors++;
         log(`  영업시간 검색 실패 ${p.name}: ${(err as Error).message}`);
       }
+    });
+  }
+
+  // 2-3) 다른 리뷰: 네이버 카페 · 다음(티스토리 · 다음 블로그 · 브런치) · 다음 카페 (7일마다, 걸어갈 곳 → 인기순)
+  const reviewSources = (deps.reviewSources ?? []).filter((s) => !s.off);
+  if (reviewSources.length) {
+    const due = places
+      .filter(
+        (p) => p.naver !== null && !p.naver.ambiguous && (!p.extraReviews || daysBetween(p.extraReviews.checkedAt, today) >= cfg.extraRefreshDays),
+      )
+      .sort((a, b) => (a.distance <= cfg.radius ? 0 : 1) - (b.distance <= cfg.radius ? 0 : 1) || popularity(b) - popularity(a));
+    await mapLimit(due, 3, async (p) => {
+      const q = blogQuery(p.name, docs.find((d) => d.id === p.id)?.address_name ?? "", p.address);
+      const next: ExtraReviews = { ...(p.extraReviews ?? {}), checkedAt: today };
+      let ran = false;
+      for (const src of reviewSources) {
+        if (src.off || (budget[src.pool] ?? 0) <= 0) continue;
+        budget[src.pool] = (budget[src.pool] ?? 0) - 1;
+        try {
+          stats.extraCalls++;
+          const res = await src.search(q.query);
+          const posts = res.posts.filter((post) => !src.exclude?.test(post.link) && isRelevantPost(post, q));
+          const share = res.posts.length ? posts.length / res.posts.length : 0;
+          const total = posts.length < res.posts.length * 0.9 ? posts.length : Math.max(posts.length, Math.round(res.total * share));
+          next[src.key] = {
+            total,
+            posts: rankReviewPosts(posts, q.core)
+              .slice(0, 3)
+              .map(({ title, link, date }) => ({ title, link, date })),
+          };
+          ran = true;
+        } catch (err) {
+          if (err instanceof HttpError && [401, 403].includes(err.status)) {
+            src.off = true;
+            log(`  ${src.key} 끔 (권한 없음): ${err.message}`);
+          } else {
+            stats.errors++;
+            log(`  ${src.key} 실패 ${p.name}: ${(err as Error).message}`);
+          }
+        }
+      }
+      if (ran) p.extraReviews = next;
     });
   }
 

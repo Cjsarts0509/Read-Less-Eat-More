@@ -1,5 +1,5 @@
 import type { MenuReport, ReviewSummary } from "../../shared/api";
-import { isLunchFriendly, isNewlyListed, placeBadges } from "../../shared/insights";
+import { isLunchFriendly, isNewlyListed, placeBadges, reviewCounts } from "../../shared/insights";
 import { lunchPrice } from "../../shared/price";
 import { driveMinutes, WALK_RADIUS_M } from "../../shared/geo";
 import { estimateLunchTime, type TravelMode } from "../../shared/time";
@@ -10,7 +10,7 @@ export type NewsFilter = "new" | "event" | "menu" | "lunch_special";
 
 export const SORT_LABEL: Record<SortKey, string> = {
   distance: "가까운 순",
-  popular: "블로그 리뷰 많은 순",
+  popular: "리뷰 많은 순",
   buzz: "요즘 많이 언급되는 순",
   inhouse: "사내 평점 순",
   cheap: "가격 낮은 순",
@@ -131,7 +131,7 @@ export function sortPlaces(places: Place[], sort: SortKey, ctx: Ctx): Place[] {
     case "distance":
       return by.sort(dist);
     case "popular":
-      return by.sort((a, b) => (b.naver?.blogTotal ?? -1) - (a.naver?.blogTotal ?? -1) || dist(a, b));
+      return by.sort((a, b) => (reviewCounts(b)?.total ?? -1) - (reviewCounts(a)?.total ?? -1) || dist(a, b));
     case "buzz":
       return by.sort(
         (a, b) =>

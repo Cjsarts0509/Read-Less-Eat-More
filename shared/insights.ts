@@ -316,3 +316,36 @@ export const LUNCH_LABEL: Record<LunchStatus, string> = {
 export function isLunchFriendly(status: LunchStatus): boolean {
   return status === "open" || status === "likely" || status === "unknown";
 }
+
+export const REVIEW_SOURCE_LABEL = {
+  naverBlog: "네이버 블로그",
+  naverCafe: "네이버 카페",
+  daumBlog: "티스토리·다음",
+  daumCafe: "다음 카페",
+} as const;
+export type ReviewSourceKey = keyof typeof REVIEW_SOURCE_LABEL;
+
+/** 리뷰 수: 네이버 블로그 + 카페 + 다음. 이름이 흔해 셀 수 없으면 null */
+export function reviewCounts(
+  p: Pick<Place, "naver" | "extraReviews">,
+): { total: number; parts: Array<{ key: ReviewSourceKey; label: string; count: number }> } | null {
+  if (!p.naver || p.naver.ambiguous) return null;
+  const parts: Array<{ key: ReviewSourceKey; label: string; count: number }> = [
+    { key: "naverBlog", label: REVIEW_SOURCE_LABEL.naverBlog, count: p.naver.blogTotal },
+  ];
+  for (const key of ["naverCafe", "daumBlog", "daumCafe"] as const) {
+    const s = p.extraReviews?.[key];
+    if (s && s.total > 0) parts.push({ key, label: REVIEW_SOURCE_LABEL[key], count: s.total });
+  }
+  return { total: parts.reduce((n, x) => n + x.count, 0), parts };
+}
+
+/** 여러 갈래의 리뷰 글을 한 줄로: 출처 이름을 붙여 날짜 최신순 (날짜 없는 카페글은 뒤로) */
+export function reviewPosts(p: Pick<Place, "naver" | "extraReviews">): Array<{ title: string; link: string; date: string | null; source: ReviewSourceKey }> {
+  const out: Array<{ title: string; link: string; date: string | null; source: ReviewSourceKey }> = [];
+  for (const post of p.naver?.posts ?? []) out.push({ ...post, source: "naverBlog" });
+  for (const key of ["naverCafe", "daumBlog", "daumCafe"] as const) {
+    for (const post of p.extraReviews?.[key]?.posts ?? []) if (!out.some((o) => o.link === post.link)) out.push({ ...post, source: key });
+  }
+  return out;
+}

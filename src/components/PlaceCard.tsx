@@ -1,5 +1,5 @@
 import { CATEGORY_BY_KEY } from "../../shared/categories";
-import { BADGE_META, closureOf, CLOSURE_LABEL, isNewlyListed, LUNCH_LABEL } from "../../shared/insights";
+import { BADGE_META, closureOf, CLOSURE_LABEL, isNewlyListed, LUNCH_LABEL, REVIEW_SOURCE_LABEL, reviewCounts, reviewPosts } from "../../shared/insights";
 import { driveMinutes } from "../../shared/geo";
 import { estimateLunchTime } from "../../shared/time";
 import type { Place } from "../../shared/types";
@@ -114,15 +114,18 @@ export function TravelLine({ place, ctx }: { place: Place; ctx: Ctx }) {
   );
 }
 
-/** 블로그 리뷰 수 */
-export function BlogCount({ place }: { place: Place }) {
+/** 리뷰 수: 네이버 블로그 + 카페 + 다음(티스토리 등) */
+export function BlogCount({ place, detail = false }: { place: Place; detail?: boolean }) {
   const n = place.naver;
   if (!n) return null;
-  if (n.ambiguous) return <span className="muted">블로그 리뷰 집계 어려움 (흔한 이름)</span>;
+  if (n.ambiguous) return <span className="muted">리뷰 집계 어려움 (흔한 이름)</span>;
+  const c = reviewCounts(place)!;
+  const breakdown = c.parts.map((x) => `${x.label} ${fmt.format(x.count)}`).join(" · ");
   return (
-    <span title={`네이버 블로그 「${n.query}」 중 이 가게 이야기로 보이는 글`}>
-      블로그 리뷰 <b>{fmt.format(n.blogTotal)}</b>
-      {n.recentPosts > 0 && <span className="muted"> · 최근 30일 {n.recentPosts}</span>}
+    <span title={`「${n.query}」 검색 중 이 가게 이야기로 보이는 글 — ${breakdown}`}>
+      리뷰 <b>{fmt.format(c.total)}</b>
+      {n.recentPosts > 0 && <span className="muted"> · 최근 30일 블로그 {n.recentPosts}</span>}
+      {detail && c.parts.length > 1 && <span className="muted"> ({breakdown})</span>}
     </span>
   );
 }
@@ -141,7 +144,7 @@ interface Props {
 export function PlaceCard({ place, ctx, highlighted, onOpen }: Props) {
   const cat = CATEGORY_BY_KEY[place.category];
   const t = estimateLunchTime(place, ctx.mode);
-  const posts = place.naver?.posts.slice(0, 2) ?? [];
+  const posts = reviewPosts(place).slice(0, 2);
   const open = () => onOpen(place.id);
   return (
     <article
@@ -184,6 +187,7 @@ export function PlaceCard({ place, ctx, highlighted, onOpen }: Props) {
           {posts.map((p) => (
             <li key={p.link}>
               <a href={p.link} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>
+                {p.source !== "naverBlog" && <span className="src-tag">{REVIEW_SOURCE_LABEL[p.source]}</span>}
                 {p.title}
               </a>
               {p.date && <span className="muted">{p.date.slice(2).replaceAll("-", ".")}</span>}

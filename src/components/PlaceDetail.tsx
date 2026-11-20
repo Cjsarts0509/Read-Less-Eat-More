@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { CATEGORY_BY_KEY } from "../../shared/categories";
 import { formatHours } from "../../shared/hours";
-import { daysBetween, HOURS_STALE_DAYS } from "../../shared/insights";
+import { daysBetween, HOURS_STALE_DAYS, REVIEW_SOURCE_LABEL, reviewPosts } from "../../shared/insights";
 import type { MenuReport, PlaceLiveResponse, ReviewSummary } from "../../shared/api";
 import { PRICE_SOURCE_LABEL } from "../../shared/price";
 import type { Place } from "../../shared/types";
@@ -244,9 +244,9 @@ export function PlaceDetail({ place: base, ctx, branch, menus, upload, live, can
           <dl className="stats">
             {place.naver && (
               <div className="stat">
-                <dt>블로그</dt>
+                <dt>리뷰</dt>
                 <dd>
-                  <BlogCount place={place} />
+                  <BlogCount place={place} detail />
                 </dd>
               </div>
             )}
@@ -301,12 +301,13 @@ export function PlaceDetail({ place: base, ctx, branch, menus, upload, live, can
             </ul>
           ) : null}
 
-          {place.naver?.posts.length ? (
+          {reviewPosts(place).length ? (
             <div className="posts">
-              <p className="posts__head">최근 블로그 리뷰</p>
+              <p className="posts__head">리뷰 글 (블로그 · 카페 · 티스토리)</p>
               <ul>
-                {place.naver.posts.map((p) => (
+                {reviewPosts(place).map((p) => (
                   <li key={p.link}>
+                    <span className="src-tag">{REVIEW_SOURCE_LABEL[p.source]}</span>
                     <a href={p.link} target="_blank" rel="noreferrer">
                       {p.title}
                     </a>
