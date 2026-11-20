@@ -309,3 +309,26 @@ describe("카카오 주소 검색 (본사 등 대략 좌표 보정)", () => {
     expect(await geocodeAddress("k", "없는 주소", fetchImpl)).toBeNull();
   });
 });
+
+describe("웹 검색 대상", () => {
+  it("네이버 조회가 실패한 곳은 웹 검색하지 않는다", async () => {
+    const searched: string[] = [];
+    const deps: Deps = {
+      today: "2026-11-20",
+      nowIso: "2026-11-20T00:00:00.000Z",
+      kakao: async () => [kakaoDoc("a", "새로 연 집", 0.001), kakaoDoc("b", "키 오류 난 집", 0.002)],
+      naver: async (q) => {
+        if (q.includes("키 오류")) throw new Error("HTTP 401");
+        return { total: 1, posts: [] };
+      },
+      google: null,
+      analyzer: null,
+      web: async (p) => {
+        searched.push(p.id);
+        return null;
+      },
+    };
+    await collectBranch(branch, null, DEFAULT_CONFIG, deps, { naver: 10, google: 0, ai: 0, web: 10 });
+    expect(searched).toEqual(["a"]);
+  });
+});

@@ -277,7 +277,8 @@ export async function collectBranch(
       .filter(
         (p) =>
           p.category !== "dessert" &&
-          (p.naver?.blogTotal ?? 0) <= cfg.webMaxBlogTotal &&
+          // 네이버를 쓰는데 조회가 안 된 곳(키 오류 등)은 건너뛴다 — 블로그 글이 정말 적은 곳만
+          (deps.naver ? p.naver !== null && p.naver.blogTotal <= cfg.webMaxBlogTotal : true) &&
           (!p.web || daysBetween(p.web.checkedAt, today) >= cfg.webRefreshDays),
       )
       .sort((a, b) => b.firstSeen.localeCompare(a.firstSeen) || a.distance - b.distance);

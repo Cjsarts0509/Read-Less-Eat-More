@@ -111,7 +111,16 @@ export function createWebSearcher(opts: { apiKey?: string; model?: string; maxUs
 
     let text = "";
     const sources: WebInfo["sources"] = [];
+    // 인용이 없으면 검색 결과 상위 주소라도 출처로 남긴다
+    const results: WebInfo["sources"] = [];
     for (const block of res.content) {
+      if (block.type === "web_search_tool_result" && Array.isArray(block.content)) {
+        for (const r of block.content) {
+          if (r.type === "web_search_result" && !results.some((s) => s.url === r.url)) {
+            results.push({ title: clip(r.title ?? r.url, 60) ?? r.url, url: r.url });
+          }
+        }
+      }
       if (block.type !== "text") continue;
       text += block.text;
       for (const c of block.citations ?? []) {
@@ -120,6 +129,6 @@ export function createWebSearcher(opts: { apiKey?: string; model?: string; maxUs
         }
       }
     }
-    return toWebInfo(extractJson(text), sources, today);
+    return toWebInfo(extractJson(text), sources.length ? sources : results, today);
   };
 }
