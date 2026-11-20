@@ -3,15 +3,16 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { CATEGORY_BY_KEY } from "../../shared/categories";
 import type { WeatherResponse } from "../../shared/api";
 import { travelText } from "../../shared/geo";
-import { BADGE_META, closureOf, daysBetween, isLunchFriendly } from "../../shared/insights";
+import { formatHours } from "../../shared/hours";
+import { BADGE_META, closureOf, daysBetween, isLunchFriendly, recentReviewPosts, REVIEW_SOURCE_LABEL, reviewCounts } from "../../shared/insights";
 import type { Branch, Place } from "../../shared/types";
 import { bookTitleOf, isbnOf } from "../lib/booktitle";
-import { badgesOf, type Ctx } from "../lib/filters";
+import { badgesOf, priceOf, type Ctx } from "../lib/filters";
 import { directionsUrl, kakaoPlaceUrl, naverMapUrl, shareText } from "../lib/links";
 import { hashString, mulberry32, weightedPick } from "../lib/random";
 import { prefersReducedMotion, sfx } from "../lib/sfx";
 import { addHistory, readHistory, readStore, writeStore, type PickRecord } from "../lib/storage";
-import { Badges, LunchLine } from "./PlaceCard";
+import { Badges, BlogCount, InhouseChip, LunchLine, PriceChip } from "./PlaceCard";
 import { weatherWeight } from "./WeatherBand";
 
 interface Props {
@@ -25,8 +26,10 @@ interface Props {
   weather?: WeatherResponse | null;
   /** 팀 투표방 열기 (저장소가 연결돼 있을 때) */
   onOpenRoom?: (() => Promise<void>) | null;
-  /** 책 오른쪽에 둘 이동 버튼 (장르 다시 고르기 · 서가 전체 보기) */
-  side?: React.ReactNode;
+  /** 펼친 책 머리(이동 시간 옆)에 둘 이동 버튼 (장르 다시 고르기 · 서가 전체 보기) */
+  nav?: React.ReactNode;
+  /** 오른쪽 장의 '더 보기': 상세 창 열기 */
+  onOpenDetail?: (id: string) => void;
 }
 
 interface Leaf {
@@ -81,7 +84,19 @@ async function copyText(text: string): Promise<boolean> {
   }
 }
 
-export function PublishStage({ branch, pool: rawPool, allPlaces, ctx, poolDesc, onShowOnMap, onToast, weather, onOpenRoom, side }: Props) {
+export function PublishStage({
+  branch,
+  pool: rawPool,
+  allPlaces,
+  ctx,
+  poolDesc,
+  onShowOnMap,
+  onToast,
+  weather,
+  onOpenRoom,
+  nav,
+  onOpenDetail,
+}: Props) {
   // 폐업 · 휴업 단서가 있는 곳은 뽑지 않는다
   const pool = useMemo(
     () => rawPool.filter((p) => p.lunch !== "closed" && closureOf(p, ctx.today)?.state !== "closed"),
@@ -286,7 +301,7 @@ export function PublishStage({ branch, pool: rawPool, allPlaces, ctx, poolDesc, 
   const decidedToday = history.find((h) => h.date === ctx.today);
 
   return (
-    <section className="publish" aria-labelledby="publish-title">
+    <section className={`publish${result ? " publish--open" : ""}`} aria-labelledby="publish-title">
       {/* 왼쪽: 편찬 데스크 */}
       <div className="panel deck">
         <div>
@@ -388,7 +403,7 @@ export function PublishStage({ branch, pool: rawPool, allPlaces, ctx, poolDesc, 
         <span className="corner corner--bl">└ NO-STARVATION</span>
         <span className="corner corner--br">KYOBO-EAT ┘</span>
 
-        <div ref={book} className="book">
+        <div ref={book} className={`book${result ? " book--spread" : ""}`}>
           <div className="book__crease" aria-hidden />
 
           {leaves.length > 0 && (
@@ -443,13 +458,17 @@ export function PublishStage({ branch, pool: rawPool, allPlaces, ctx, poolDesc, 
               </div>
             </div>
           ) : (
-            <div className="revealed">
+            <>
+            <div key={`l-${obi}`} className="revealed">
               <div>
                 <div className="revealed__top">
-                  <span className="badge-navy">
-                    {CATEGORY_BY_KEY[result.category].emoji} {result.categoryPath || CATEGORY_BY_KEY[result.category].label}
+                  <span className="badge-navy" title={result.categoryPath}>
+                    {CATEGORY_BY_KEY[result.category].emoji} {CATEGORY_BY_KEY[result.category].label}
                   </span>
-                  <span className="badge-mustard">{travelText(result)}</span>
+                  <span className="revealed__nav">
+                    <span className="badge-mustard">{travelText(result)}</span>
+                    {nav && <span className="revealed__btns">{nav}</span>}
+                  </span>
                 </div>
                 <p className="revealed__edition">
                   {branch.label} 서가 · {rerolls === 0 ? "초판 1쇄 발행" : `개정 ${rerolls}판 발행`}
@@ -467,7 +486,7 @@ export function PublishStage({ branch, pool: rawPool, allPlaces, ctx, poolDesc, 
                   {result.ai?.signatureMenus.length ? <p className="diner__menu">대표 메뉴: {result.ai.signatureMenus.join(" · ")}</p> : null}
                   <Badges place={result} ctx={ctx} />
                   {result.ai?.summary && <p className="diner__review">“사서 한줄평: {result.ai.summary}”</p>}
-                  <LunchLine place={result} />
+                  {result.lunch !== "unknown" && <LunchLine place={result} />}
                 </div>
               </div>
 
@@ -509,10 +528,125 @@ export function PublishStage({ branch, pool: rawPool, allPlaces, ctx, poolDesc, 
                 </div>
               </div>
             </div>
+            <RightPage key={`r-${obi}`} place={result} ctx={ctx} onOpenDetail={onOpenDetail} />
+            </>
           )}
         </div>
-        {side && <div className="stage__side">{side}</div>}
       </div>
     </section>
+  );
+}
+
+/** 펼친 책의 오른쪽 장: 상세 정보 + 최근 리뷰 글 */
+function RightPage({ place, ctx, onOpenDetail }: { place: Place; ctx: Ctx; onOpenDetail?: (id: string) => void }) {
+  const hours = place.hours ? formatHours(place.hours) : "";
+  const price = priceOf(place, ctx);
+  const g = place.google;
+  const inhouse = ctx.reviews?.[place.id]?.count;
+  const posts = recentReviewPosts(place, 4);
+
+  return (
+    <div className="page-r">
+      <div className="page-r__head">
+        <span className="page-r__kicker">DETAIL · 상세 정보</span>
+        <span className="page-r__folio" aria-hidden>
+          p.2
+        </span>
+      </div>
+
+      <dl className="facts">
+        <div>
+          <dt>분류</dt>
+          <dd>{place.categoryPath || CATEGORY_BY_KEY[place.category].label}</dd>
+        </div>
+        <div>
+          <dt>주소</dt>
+          <dd>{place.address}</dd>
+        </div>
+        {place.phone && (
+          <div>
+            <dt>전화</dt>
+            <dd>
+              <a href={`tel:${place.phone}`}>{place.phone}</a>
+            </dd>
+          </div>
+        )}
+        {hours && (
+          <div>
+            <dt>영업</dt>
+            <dd title={place.hours?.text}>{hours}</dd>
+          </div>
+        )}
+        {price && (
+          <div>
+            <dt>1인</dt>
+            <dd>
+              <PriceChip place={place} ctx={ctx} />
+            </dd>
+          </div>
+        )}
+        {place.naver && (place.naver.ambiguous || (reviewCounts(place)?.total ?? 0) > 0) && (
+          <div>
+            <dt>리뷰</dt>
+            <dd>
+              <BlogCount place={place} />
+            </dd>
+          </div>
+        )}
+        {g?.rating != null && (
+          <div>
+            <dt>Google</dt>
+            <dd>
+              ★ {g.rating.toFixed(1)}
+              {g.ratingCount != null && <span className="muted"> ({g.ratingCount.toLocaleString("ko-KR")})</span>}
+            </dd>
+          </div>
+        )}
+        {inhouse ? (
+          <div>
+            <dt>사내</dt>
+            <dd>
+              <InhouseChip place={place} ctx={ctx} />
+            </dd>
+          </div>
+        ) : null}
+      </dl>
+
+      {place.ai?.lunchNote && <p className="page-r__note">💡 {place.ai.lunchNote}</p>}
+      {place.ai?.tags.length ? (
+        <ul className="tags page-r__tags">
+          {place.ai.tags.slice(0, 6).map((t) => (
+            <li key={t}>#{t}</li>
+          ))}
+        </ul>
+      ) : null}
+
+      <div className="page-r__reviews">
+        <p className="page-r__sub">📝 최근 블로그 리뷰</p>
+        {posts.length ? (
+          <ol className="rposts">
+            {posts.map((p) => (
+              <li key={p.link}>
+                <a href={p.link} target="_blank" rel="noreferrer">
+                  {p.title}
+                </a>
+                <span className="rposts__meta">
+                  <span className="src-tag">{REVIEW_SOURCE_LABEL[p.source]}</span>
+                  {p.date && <span className="muted">{p.date.slice(2).replaceAll("-", ".")}</span>}
+                </span>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="muted page-r__empty">아직 모은 리뷰 글이 없어요. 네이버 지도에서 방문자 리뷰를 확인해 보세요.</p>
+        )}
+      </div>
+
+      {onOpenDetail && (
+        <button type="button" className="linkish page-r__more" onClick={() => onOpenDetail(place.id)}>
+          상세 전체 보기 · 영업시간 실시간 확인 ›
+        </button>
+      )}
+    </div>
   );
 }

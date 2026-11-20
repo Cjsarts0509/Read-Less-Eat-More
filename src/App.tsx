@@ -54,7 +54,7 @@ function useMedia(query: string): boolean {
 }
 
 /** 스와이프로 책장 넘기기에서 뺄 곳 (지도 · 가로 스크롤 · 입력칸 · 팝업) */
-const NO_SWIPE = ".no-swipe, .leaflet-container, .shelf__track, input, textarea, select, .sheet";
+const NO_SWIPE = ".no-swipe, .leaflet-container, .case__track, input, textarea, select, .sheet";
 type PlacesState = { status: "idle" } | { status: "loading" } | { status: "missing" } | { status: "ready"; data: BranchPlaces };
 
 const PAGE = 48;
@@ -699,13 +699,14 @@ export function App() {
                         onToast={showToast}
                         weather={weatherOn ? weather : null}
                         onOpenRoom={canRoom ? openRoom : null}
-                        side={
+                        onOpenDetail={showCard}
+                        nav={
                           <>
-                            <button type="button" className="bbtn side-btn" onClick={() => go(2)}>
-                              <span aria-hidden>‹</span> 장르 다시 고르기
+                            <button type="button" className="rnav" onClick={() => go(2)}>
+                              🔖 장르 다시 고르기
                             </button>
-                            <button type="button" className="bbtn side-btn side-btn--go" onClick={() => go(4)}>
-                              📚 {sorted.length}곳 서가 전체 보기 <span aria-hidden>›</span>
+                            <button type="button" className="rnav rnav--go" onClick={() => go(4)}>
+                              📚 서가 전체 보기
                             </button>
                           </>
                         }

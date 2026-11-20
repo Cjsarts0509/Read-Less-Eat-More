@@ -45,7 +45,7 @@ export function LunchLine({ place }: { place: Place }) {
     <p className={`lunch lunch--${place.lunch}`}>
       <span className="lunch__dot" aria-hidden />
       <span className="lunch__label">{LUNCH_LABEL[place.lunch]}</span>
-      {place.lunchReason && <span className="lunch__why"> · {place.lunchReason}</span>}
+      {place.lunchReason && !place.lunchReason.startsWith(LUNCH_LABEL[place.lunch]) && <span className="lunch__why"> · {place.lunchReason}</span>}
     </p>
   );
 }

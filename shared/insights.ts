@@ -349,3 +349,22 @@ export function reviewPosts(p: Pick<Place, "naver" | "extraReviews">): Array<{ t
   }
   return out;
 }
+
+/**
+ * 펼친 책 오른쪽 장의 '최근 리뷰': 제목에 가게 이름(지점 접미사 뺀)이 나오는 글을 최신순으로.
+ * 이름이 나오는 글이 하나도 없으면 가려낼 수 없으니 전체를 최신순으로.
+ */
+export function recentReviewPosts(
+  p: Pick<Place, "name" | "naver" | "extraReviews">,
+  limit = 4,
+): Array<{ title: string; link: string; date: string | null; source: ReviewSourceKey }> {
+  const tokens = p.name.trim().split(/\s+/);
+  if (tokens.length >= 2 && /(점|지점|본점|호점)$/.test(tokens.at(-1)!)) tokens.pop();
+  const core = tokens.join("").toLowerCase();
+  const all = reviewPosts(p).map((x, i) => ({ x, i }));
+  const named = core.length >= 2 ? all.filter(({ x }) => x.title.replace(/\s+/g, "").toLowerCase().includes(core)) : [];
+  return (named.length ? named : all)
+    .sort((a, b) => (b.x.date ?? "").localeCompare(a.x.date ?? "") || a.i - b.i)
+    .slice(0, limit)
+    .map(({ x }) => x);
+}

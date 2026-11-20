@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { toKmaGrid, weatherMood } from "../shared/kma";
-import { adRatioOf, closureOf, computeLunch, computePriceChange, mergePriceHistory } from "../shared/insights";
+import { adRatioOf, closureOf, computeLunch, computePriceChange, mergePriceHistory, recentReviewPosts } from "../shared/insights";
 import { estimateLunchTime } from "../shared/time";
 import type { Place, PricePoint } from "../shared/types";
 import { extractJson, toWebInfo } from "../pipeline/sources/websearch";
@@ -113,5 +113,35 @@ describe("웹 검색 응답 읽기", () => {
     const info = toWebInfo({ found: true, summary: "x", lunch: "maybe", closure: "??", menus: [] }, [], "2026-11-20");
     expect(info?.lunch).toBe("unknown");
     expect(info?.closure).toBe("unknown");
+  });
+});
+
+describe("recentReviewPosts", () => {
+  const naver = (posts: Array<{ title: string; date: string | null }>) =>
+    ({ blogTotal: posts.length, recentPosts: 0, query: "", posts: posts.map((p, i) => ({ ...p, link: `https://b/${i}` })) }) as unknown as Place["naver"];
+
+  it("가게 이름이 나오는 글만 최신순으로", () => {
+    const out = recentReviewPosts({
+      name: "핀사로 상암점",
+      naver: naver([
+        { title: "누리꿈스퀘어 직장인 점심 핀사로", date: "2026-10-30" },
+        { title: "[상암 DMC] 브런치 카페 브레딕트 후기", date: "2026-11-15" },
+        { title: "상암 핀 사로 내돈내산 후기", date: "2026-11-20" },
+      ]),
+      extraReviews: undefined,
+    });
+    expect(out.map((p) => p.date)).toEqual(["2026-11-20", "2026-10-30"]);
+  });
+
+  it("이름이 나오는 글이 없으면 전체를 최신순으로 (날짜 없는 글은 뒤)", () => {
+    const out = recentReviewPosts({
+      name: "경양식당",
+      naver: naver([
+        { title: "점심 기록", date: null },
+        { title: "2월 2화", date: "2026-04-07" },
+      ]),
+      extraReviews: undefined,
+    });
+    expect(out.map((p) => p.title)).toEqual(["2월 2화", "점심 기록"]);
   });
 });
