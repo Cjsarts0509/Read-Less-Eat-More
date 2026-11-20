@@ -18,6 +18,9 @@ export const SORT_LABEL: Record<SortKey, string> = {
   news: "새 소식 먼저",
 };
 
+/** 화면의 정렬 목록에서 뺀 정렬 */
+export const HIDDEN_SORTS: SortKey[] = ["news"];
+
 export const NEWS_FILTERS: Array<{ key: NewsFilter; label: string; types: BadgeType[] }> = [
   { key: "new", label: "신규 오픈", types: ["new_open"] },
   { key: "event", label: "이벤트·할인", types: ["event", "discount"] },

@@ -1,5 +1,5 @@
 import { CATEGORY_BY_KEY } from "../../shared/categories";
-import { BADGE_META, closureOf, CLOSURE_LABEL, isNewlyListed, LUNCH_LABEL, REVIEW_SOURCE_LABEL, reviewCounts, reviewPosts } from "../../shared/insights";
+import { BADGE_META, closureOf, CLOSURE_LABEL, isNewlyListed, LUNCH_LABEL, reviewCounts } from "../../shared/insights";
 import { driveMinutes } from "../../shared/geo";
 import { estimateLunchTime } from "../../shared/time";
 import type { Place } from "../../shared/types";
@@ -144,7 +144,6 @@ interface Props {
 export function PlaceCard({ place, ctx, highlighted, onOpen }: Props) {
   const cat = CATEGORY_BY_KEY[place.category];
   const t = estimateLunchTime(place, ctx.mode);
-  const posts = reviewPosts(place).slice(0, 2);
   const open = () => onOpen(place.id);
   return (
     <article
@@ -182,22 +181,8 @@ export function PlaceCard({ place, ctx, highlighted, onOpen }: Props) {
         <TravelLine place={place} ctx={ctx} />
       </p>
 
-      {posts.length > 0 && (
-        <ul className="card__reviews" aria-label="최근 블로그 리뷰">
-          {posts.map((p) => (
-            <li key={p.link}>
-              <a href={p.link} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>
-                {p.source !== "naverBlog" && <span className="src-tag">{REVIEW_SOURCE_LABEL[p.source]}</span>}
-                {p.title}
-              </a>
-              {p.date && <span className="muted">{p.date.slice(2).replaceAll("-", ".")}</span>}
-            </li>
-          ))}
-        </ul>
-      )}
-
       <span className="card__more" aria-hidden>
-        영업시간 · 메뉴 · 지도 자세히 ›
+        리뷰 글 · 영업시간 · 메뉴 자세히 ›
       </span>
     </article>
   );

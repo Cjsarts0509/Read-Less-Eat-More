@@ -19,6 +19,7 @@ import {
   applyFilters,
   countByCategory,
   DEFAULT_FILTERS,
+  HIDDEN_SORTS,
   inhouseTop,
   SORT_LABEL,
   sortPlaces,
@@ -121,7 +122,7 @@ export function App() {
   const [filters, setFilters] = useState<Filters>(() => {
     const { v, ...saved } = readStore<Partial<Filters> & { v?: number }>("rlem:filters", {});
     // 기본 정렬을 '요즘 많이 언급되는 순'으로 바꿨으니, 그 전에 저장된 정렬은 버린다
-    if (v !== 2) delete saved.sort;
+    if (v !== 2 || (saved.sort && HIDDEN_SORTS.includes(saved.sort))) delete saved.sort;
     return { ...DEFAULT_FILTERS, ...saved, query: "", news: [] };
   });
   const [tab, setTab] = useState<CategoryKey | "all">("all");
@@ -135,7 +136,8 @@ export function App() {
   // 책장 넘기기: 지점을 이미 골라 둔 사람은 장르부터
   const [step, setStep] = useState<number>(() => (selectedCode ? 2 : 1));
   const [dir, setDir] = useState<"next" | "prev">("next");
-  const [oneHand, setOneHand] = useState<boolean>(() => readStore("lmp:onehand", false));
+  // 크게보기: 머리(제목 · 지점 상자)를 접고 단계 화면을 넓힌다
+  const [bigView, setBigView] = useState<boolean>(() => readStore("lmp:bigView", false));
   const [detailId, setDetailId] = useState<string | null>(null);
   const [shelfView, setShelfView] = useState<ShelfView>("list");
   const [chatOpen, setChatOpen] = useState(false);
@@ -244,6 +246,8 @@ export function App() {
   const go = useCallback(
     (n: number) => {
       const next = Math.max(1, Math.min(n, maxStepRef.current));
+      // 서가는 언제나 카드 목록부터 (지도에서 보기로 들어올 때만 지도)
+      if (next === 4) setShelfView("list");
       setStep((cur) => {
         if (next === cur) return cur;
         setDir(next > cur ? "next" : "prev");
@@ -258,7 +262,7 @@ export function App() {
     },
     [],
   );
-  useEffect(() => writeStore("lmp:onehand", oneHand), [oneHand]);
+  useEffect(() => writeStore("lmp:bigView", bigView), [bigView]);
   useEffect(() => {
     if (step > maxStep) setStep(maxStep);
   }, [step, maxStep]);
@@ -345,8 +349,8 @@ export function App() {
   const showOnMap = useCallback(
     (id: string) => {
       setFocus((f) => ({ id, n: (f?.n ?? 0) + 1 }));
-      setShelfView("map");
       go(4);
+      setShelfView("map");
       window.setTimeout(() => areaMapRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 420);
     },
     [go],
@@ -385,7 +389,7 @@ export function App() {
         : WALK_RADIUS_M;
   const poolDesc = `${reachDesc} · ${tabLabel}${filters.lunchOnly ? " · 점심 영업" : ""}`;
   const branchInfo = selected ? index?.branches[selected.code] : undefined;
-  const sorts = (Object.keys(SORT_LABEL) as SortKey[]).filter((s) => s !== "rating" || hasRating);
+  const sorts = (Object.keys(SORT_LABEL) as SortKey[]).filter((s) => !HIDDEN_SORTS.includes(s) && (s !== "rating" || hasRating));
   const weatherText = weather?.available ? `${weather.precip || weather.sky} · ${weather.tmin}~${weather.tmax}℃ · 강수확률 ${weather.pop ?? "?"}%` : undefined;
   const canRoom = config.store && config.ai && !DEMO;
   const upload = config.store && config.ai && !DEMO && selected ? { branch: selected.code, onDone: refreshMenus } : null;
@@ -460,12 +464,13 @@ export function App() {
       </button>
       <button
         type="button"
-        className={`stepnav__hand${oneHand ? " stepnav__hand--on" : ""}`}
-        aria-pressed={oneHand}
-        onClick={() => setOneHand((v) => !v)}
-        title="한손 모드: 화면을 아래로 내려 엄지로 닿게 해요"
+        className={`stepnav__hand${bigView ? " stepnav__hand--on" : ""}`}
+        aria-pressed={bigView}
+        onClick={() => setBigView((v) => !v)}
+        title={bigView ? "보통 보기: 제목과 지점 상자를 다시 보여요" : "크게 보기: 제목과 지점 상자를 접고 단계 화면을 넓혀요"}
       >
-        ✋<span>한손</span>
+        {bigView ? "⤡" : "⤢"}
+        <span>{bigView ? "보통" : "크게"}</span>
       </button>
     </nav>
   );
@@ -489,7 +494,7 @@ export function App() {
   );
 
   return (
-    <div className={`app${oneHand ? " app--onehand" : ""}${ROOM ? "" : " app--paged"}`}>
+    <div className={`app${bigView && !ROOM ? " app--big" : ""}${ROOM ? "" : " app--paged"}`}>
       <Marquee />
 
       <div className="wrap">
@@ -681,7 +686,7 @@ export function App() {
                         </div>
                         <div className="shelf-tools">
                           {!wide && (
-                            <div className="seg seg--tight" role="radiogroup" aria-label="보기 방식">
+                            <div className="seg seg--tight shelf-view-seg" role="radiogroup" aria-label="보기 방식">
                               {(["list", "map"] as const).map((v) => (
                                 <button
                                   type="button"

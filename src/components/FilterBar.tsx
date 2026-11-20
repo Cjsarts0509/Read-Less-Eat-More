@@ -1,6 +1,6 @@
 import { CATEGORIES } from "../../shared/categories";
 import type { CategoryKey } from "../../shared/types";
-import { NEWS_FILTERS, type Filters, type NewsFilter } from "../lib/filters";
+import type { Filters } from "../lib/filters";
 import { sfx } from "../lib/sfx";
 
 const BUDGETS = [
@@ -66,19 +66,27 @@ function Segmented<T extends number>({
   );
 }
 
-/** 도보 거리 · 점심시간 · 점심 영업 · 검색 · 새 소식 (뽑기 후보와 목록 모두에 적용) */
+/** 이름표: 넓은 화면은 아이콘 + 글자, 휴대폰은 아이콘만 */
+function Label({ icon, text, title }: { icon: string; text: string; title?: string }) {
+  return (
+    <span className="frow__label" title={title ?? text} aria-label={text}>
+      <span aria-hidden>{icon}</span>
+      <span className="frow__text"> {text}</span>
+    </span>
+  );
+}
+
+/** 이동 · 도보/차로 · 점심시간 · 1인 예산 · 점심 영업 (뽑기 후보와 목록 모두에 적용) */
 export function FilterBar({ filters, onChange }: Props) {
   const set = <K extends keyof Filters>(k: K, v: Filters[K]) => {
     sfx.tagClick();
     onChange({ ...filters, [k]: v });
   };
-  const toggleNews = (k: NewsFilter) =>
-    set("news", filters.news.includes(k) ? filters.news.filter((x) => x !== k) : [...filters.news, k]);
 
   return (
     <div className="fbox">
       <div className="frow">
-        <span className="frow__label">이동</span>
+        <Label icon="🧭" text="이동" />
         <div className="seg2" role="radiogroup" aria-label="이동 방법" style={{ "--n": 2 } as React.CSSProperties}>
           {(["walk", "drive"] as const).map((m) => (
             <button
@@ -96,59 +104,30 @@ export function FilterBar({ filters, onChange }: Props) {
       </div>
       {filters.mode === "walk" ? (
         <div className="frow">
-          <span className="frow__label">🚶 도보</span>
+          <Label icon="🚶" text="도보" />
           <Segmented label="도보 거리" value={filters.walk} options={WALKS} onPick={(v) => set("walk", v)} />
         </div>
       ) : (
         <div className="frow">
-          <span className="frow__label" title="도로 우회 · 점심시간 도심 속도 · 주차를 넣은 어림">
-            🚗 차로
-          </span>
+          <Label icon="🚗" text="차로" title="도로 우회 · 점심시간 도심 속도 · 주차를 넣은 어림" />
           <Segmented label="차로 걸리는 시간" value={filters.drive} options={DRIVES} onPick={(v) => set("drive", v)} />
         </div>
       )}
       <div className="frow">
-        <span className="frow__label" title="왕복 걷는 시간 + 식사 + 웨이팅">
-          ⏱ 점심시간
-        </span>
+        <Label icon="⏱" text="점심시간" title="왕복 이동 + 식사 + 웨이팅" />
         <Segmented label="점심시간 한도 (왕복 + 식사 + 웨이팅)" value={filters.timeBudget} options={BUDGETS} onPick={(v) => set("timeBudget", v)} />
       </div>
       <div className="frow">
-        <span className="frow__label" title="가격을 아는 가게 중 이 금액을 넘는 곳은 뺍니다">
-          💳 1인 예산
-        </span>
+        <Label icon="💳" text="1인 예산" title="가격을 아는 가게 중 이 금액을 넘는 곳은 뺍니다" />
         <Segmented label="1인 예산 (식대 한도)" value={filters.budget} options={BUDGET_WON} onPick={(v) => set("budget", v)} />
       </div>
-      <div className="frow frow--split">
+      <div className="frow">
+        <Label icon="🕛" text="영업" />
         <label className="switch">
           <input type="checkbox" checked={filters.lunchOnly} onChange={(e) => set("lunchOnly", e.target.checked)} />
           <span className="switch__track" aria-hidden />
           점심 영업하는 곳만
         </label>
-        <input
-          className="input fbox__search"
-          type="search"
-          placeholder="🔎 가게 · 메뉴 (예: 국밥, 혼밥)"
-          value={filters.query}
-          onChange={(e) => onChange({ ...filters, query: e.target.value })}
-          aria-label="가게·메뉴 검색"
-        />
-      </div>
-      <div className="frow">
-        <span className="frow__label">🆕 새 소식</span>
-        <div className="chips no-swipe" aria-label="새 소식 필터">
-          {NEWS_FILTERS.map((n) => (
-            <button
-              type="button"
-              key={n.key}
-              className={`chip${filters.news.includes(n.key) ? " chip--on" : ""}`}
-              aria-pressed={filters.news.includes(n.key)}
-              onClick={() => toggleNews(n.key)}
-            >
-              {n.label}
-            </button>
-          ))}
-        </div>
       </div>
     </div>
   );
