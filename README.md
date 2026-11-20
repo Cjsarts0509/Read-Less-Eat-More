@@ -101,20 +101,16 @@
    - Account Resources: 내 계정 / Zone Resources: 연결할 도메인(있다면)
 2. 대시보드 Workers 화면 오른쪽의 **Account ID** 를 복사
 3. 두 값을 GitHub Secrets 에 `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` 로 저장
-4. `main` 브랜치에 push 하면 `Deploy` 워크플로가 `https://lunch-makes-the-person.<계정>.workers.dev` 로 배포
+4. `main` 브랜치에 push 하면 `Deploy` 워크플로가 `https://lunch-makes-the-person.cjs0509.workers.dev` 로 배포
 5. **Actions → 식당 데이터 수집 → Run workflow** 로 첫 수집 (처음엔 `ai_budget` 을 크게 잡으면 빨리 채워짐)
 
 #### 내 도메인 연결 (cjslabs.kr)
 
-`wrangler.jsonc` 에 이미 들어 있습니다.
+1. Cloudflare 대시보드 → **도메인 추가**로 `cjslabs.kr` 을 등록하고, 도메인을 산 곳(가비아 등)에서 네임서버를 Cloudflare 가 알려 준 두 개로 바꿉니다. 「활성」이 되면 다음 단계로.
+2. GitHub → Settings → Secrets and variables → Actions → **Variables** 에 `CUSTOM_DOMAIN` = `cjslabs.kr` 을 넣습니다.
+3. Actions → Deploy → Run workflow. 배포 때 `wrangler deploy --domain cjslabs.kr` 로 DNS 레코드와 인증서가 자동으로 만들어집니다.
 
-```jsonc
-"routes": [{ "pattern": "cjslabs.kr", "custom_domain": true }],
-```
-
-- `cjslabs.kr` 존이 Cloudflare 계정에 있어야 하고, API 토큰을 만들 때 Zone Resources 에 `cjslabs.kr` 을 넣어야 합니다.
-- 배포하면 DNS 레코드와 인증서가 자동으로 만들어집니다. 루트 도메인에 이미 다른 A/CNAME 레코드가 있으면 연결이 실패하니,
-  그럴 땐 레코드를 지우거나 `lunch.cjslabs.kr` 처럼 서브도메인으로 바꾸세요.
+도메인을 붙이기 전에도 `https://lunch-makes-the-person.cjs0509.workers.dev` 로 접속할 수 있습니다. 루트 도메인에 이미 다른 A/CNAME 레코드가 있으면 연결이 실패하니, 그럴 땐 `lunch.cjslabs.kr` 처럼 서브도메인을 쓰세요.
 
 #### 사내에서만 보이게
 
