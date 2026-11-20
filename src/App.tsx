@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { CATEGORY_BY_KEY } from "../shared/categories";
 import type { Branch, BranchPlaces, CategoryKey, DataIndex } from "../shared/types";
 import type { MenuReport, ReviewSummary, WeatherResponse } from "../shared/api";
@@ -27,7 +27,7 @@ import {
   type Filters,
   type SortKey,
 } from "./lib/filters";
-import { sfx } from "./lib/sfx";
+import { prefersReducedMotion, sfx } from "./lib/sfx";
 import { readStore, writeStore } from "./lib/storage";
 
 type PickView = "shelf" | "map";
@@ -132,6 +132,9 @@ export function App() {
   const [toast, setToast] = useState<{ msg: string; icon: string; n: number } | null>(null);
   const areaMapRef = useRef<HTMLDivElement>(null);
   const pagerRef = useRef<HTMLDivElement>(null);
+  const heroRef = useRef<HTMLElement>(null);
+  /** 단계를 넘기기 직전 머리 높이 (줄어드는 모션의 시작점) */
+  const heroFrom = useRef<number | null>(null);
   const today = todayKst();
   // 책장 넘기기: 지점을 이미 골라 둔 사람은 장르부터
   const [step, setStep] = useState<number>(() => (selectedCode ? 2 : 1));
@@ -248,6 +251,7 @@ export function App() {
       const next = Math.max(1, Math.min(n, maxStepRef.current));
       // 서가는 언제나 카드 목록부터 (지도에서 보기로 들어올 때만 지도)
       if (next === 4) setShelfView("list");
+      heroFrom.current = heroRef.current?.offsetHeight ?? null;
       setStep((cur) => {
         if (next === cur) return cur;
         setDir(next > cur ? "next" : "prev");
@@ -263,6 +267,25 @@ export function App() {
     [],
   );
   useEffect(() => writeStore("lmp:bigView", bigView), [bigView]);
+
+  // 편찬 · 서가에서는 머리를 한 줄로 줄이고 단계 화면을 넓힌다 (높이를 부드럽게)
+  const compactHead = step >= 3;
+  useLayoutEffect(() => {
+    const el = heroRef.current;
+    const from = heroFrom.current;
+    heroFrom.current = null;
+    if (!el || from == null || prefersReducedMotion()) return;
+    const to = el.offsetHeight;
+    if (Math.abs(from - to) < 4) return;
+    el.style.overflow = "hidden";
+    const anim = el.animate([{ height: `${from}px` }, { height: `${to}px` }], { duration: 450, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" });
+    for (const child of el.querySelectorAll<HTMLElement>(".hero__grid > *")) {
+      child.animate([{ opacity: 0, transform: "translateY(-6px)" }, { opacity: 1, transform: "none" }], { duration: 380, easing: "ease-out" });
+    }
+    anim.onfinish = anim.oncancel = () => {
+      el.style.overflow = "";
+    };
+  }, [compactHead]);
   useEffect(() => {
     if (step > maxStep) setStep(maxStep);
   }, [step, maxStep]);
@@ -494,12 +517,12 @@ export function App() {
   );
 
   return (
-    <div className={`app${bigView && !ROOM ? " app--big" : ""}${ROOM ? "" : " app--paged"}`}>
+    <div className={`app${bigView && !ROOM ? " app--big" : ""}${compactHead && !ROOM ? " app--compact" : ""}${ROOM ? "" : " app--paged"}`}>
       <Marquee />
 
       <div className="wrap">
         {/* 머리: 제목 · 심심풀이 · 오늘의 서가 */}
-        <header className="panel panel--lg hero">
+        <header ref={heroRef} className="panel panel--lg hero">
           <div className="hero__grid">
             <div className="hero__brand">
               <div className="hero__pills">

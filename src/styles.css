@@ -3883,6 +3883,15 @@ body.modal-open {
 
 .fun-open {
   display: none;
+  align-items: center;
+  padding: 3px 10px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: var(--mustard);
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+  cursor: pointer;
 }
 
 @media (max-width: 1023px) {
@@ -3895,14 +3904,6 @@ body.modal-open {
   }
   .fun-open {
     display: inline-flex;
-    align-items: center;
-    padding: 3px 10px;
-    border: 2px solid var(--ink);
-    border-radius: 999px;
-    background: var(--mustard);
-    font-size: 12px;
-    font-weight: 900;
-    cursor: pointer;
   }
 }
 
@@ -4276,5 +4277,70 @@ body.modal-open {
 
   .grid {
     gap: 12px;
+  }
+}
+
+/* ---------- 편찬 · 서가: 머리를 한 줄로 (App 이 높이를 부드럽게 줄인다) ---------- */
+
+.app--compact .hero {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  box-shadow: var(--sh);
+}
+
+.app--compact .hero__grid {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.app--compact .hero__brand {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+}
+
+.app--compact .hero__brand .hero__title {
+  order: -1;
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+.app--compact .hero__brand .hero__pills {
+  margin: 0;
+}
+
+.app--compact .hero__lead,
+.app--compact .hero__fun,
+.app--compact .hero .pill-green,
+.app--compact .hero .sticker,
+.app--compact .stock__head,
+.app--compact .stock__count {
+  display: none;
+}
+
+.app--compact .fun-open {
+  display: inline-flex;
+}
+
+.app--compact .stock {
+  padding: 6px 12px;
+}
+
+.app--compact .stock__branch {
+  margin: 0;
+}
+
+/* 편찬 결과 책이 잘리지 않도록: 책은 내용만큼 늘고, 넘치면 편찬대 안에서 스크롤 (휴대폰은 위에서 따로) */
+@media (min-width: 761px) and (min-height: 560px) {
+  .app--paged .stage {
+    overflow: auto;
+    align-items: flex-start;
+    padding: 16px;
+  }
+
+  .app--paged .stage > .book {
+    height: auto;
+    min-height: min(480px, calc(100% - 8px));
+    margin: auto;
   }
 }
