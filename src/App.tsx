@@ -2,25 +2,54 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CATEGORY_BY_KEY } from "../shared/categories";
 import type { Branch, BranchPlaces, CategoryKey, DataIndex } from "../shared/types";
 import { AskAI } from "./components/AskAI";
-import { BranchList } from "./components/BranchList";
+import { BookShelf } from "./components/BookShelf";
 import { BranchMap } from "./components/BranchMap";
 import { CategoryTabs, FilterBar } from "./components/FilterBar";
 import { PlaceCard } from "./components/PlaceCard";
-import { RandomPick } from "./components/RandomPick";
+import { PublishStage } from "./components/PublishStage";
 import { loadBranches, loadConfig, loadIndex, loadPlaces, todayKst, type AppConfig } from "./lib/data";
-import { applyFilters, countByCategory, DEFAULT_FILTERS, sortPlaces, type Ctx, type Filters } from "./lib/filters";
+import { applyFilters, countByCategory, DEFAULT_FILTERS, SORT_LABEL, sortPlaces, type Ctx, type Filters, type SortKey } from "./lib/filters";
+import { sfx } from "./lib/sfx";
 import { readStore, writeStore } from "./lib/storage";
 
-type View = "map" | "list";
+type PickView = "shelf" | "map";
 type PlacesState = { status: "idle" } | { status: "loading" } | { status: "missing" } | { status: "ready"; data: BranchPlaces };
 
 const PAGE = 48;
 const params = new URLSearchParams(window.location.search);
 const DEMO = params.has("demo");
 
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  return new Intl.DateTimeFormat("ko-KR", { month: "long", day: "numeric", weekday: "short", timeZone: "Asia/Seoul" }).format(d);
+const TICKER = [
+  "📚 사람은 책을 만들고, 점심은 사람을 만든다",
+  "읽지 않고 먹습니다 · READ LESS, EAT MORE",
+  "완독보다 완뚝! 절판은 있어도 절식은 없다",
+  "주의: 3회 이상 재추첨 시 변심 반품 불가 도장이 날인됩니다",
+  "신규 오픈 · 이벤트 · 시즌 메뉴는 AI 사서가 매일 아침 입고",
+];
+
+function formatDate(iso: string, withWeekday = true): string {
+  return new Intl.DateTimeFormat("ko-KR", {
+    month: "long",
+    day: "numeric",
+    ...(withWeekday ? { weekday: "short" as const } : {}),
+    timeZone: "Asia/Seoul",
+  }).format(new Date(iso));
+}
+
+function Marquee() {
+  const items = [...TICKER, ...TICKER];
+  return (
+    <div className="marquee" aria-hidden>
+      <div className="marquee__track">
+        {items.map((t, i) => (
+          <span key={i} className="marquee__item">
+            {t}
+            <span className={i % 2 ? "marquee__dot--t" : "marquee__dot--m"}>{i % 2 ? "●" : "★"}</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export function App() {
@@ -28,7 +57,7 @@ export function App() {
   const [index, setIndex] = useState<DataIndex | null>(null);
   const [config, setConfig] = useState<AppConfig>({ ai: false });
   const [selectedCode, setSelectedCode] = useState<string | null>(() => params.get("b") ?? readStore<string | null>("rlem:branch", null));
-  const [view, setView] = useState<View>(() => readStore<View>("rlem:view", "map"));
+  const [pickView, setPickView] = useState<PickView>(() => readStore<PickView>("rlem:pickView", "shelf"));
   const [places, setPlaces] = useState<PlacesState>({ status: "idle" });
   const [filters, setFilters] = useState<Filters>(() => ({
     ...DEFAULT_FILTERS,
@@ -40,7 +69,9 @@ export function App() {
   const [focus, setFocus] = useState<{ id: string; n: number } | null>(null);
   const [highlight, setHighlight] = useState<string | null>(null);
   const [visible, setVisible] = useState(PAGE);
-  const mapRef = useRef<HTMLDivElement>(null);
+  const [sound, setSound] = useState(sfx.enabled);
+  const [toast, setToast] = useState<{ msg: string; icon: string; n: number } | null>(null);
+  const areaMapRef = useRef<HTMLDivElement>(null);
   const today = todayKst();
 
   useEffect(() => {
@@ -51,7 +82,6 @@ export function App() {
 
   const selected = useMemo(() => branches.find((b) => b.code === selectedCode) ?? null, [branches, selectedCode]);
 
-  // 고른 지점을 주소창과 브라우저에 기억
   useEffect(() => {
     writeStore("rlem:branch", selectedCode);
     const url = new URL(window.location.href);
@@ -60,7 +90,7 @@ export function App() {
     window.history.replaceState(null, "", url);
   }, [selectedCode]);
 
-  useEffect(() => writeStore("rlem:view", view), [view]);
+  useEffect(() => writeStore("rlem:pickView", pickView), [pickView]);
   useEffect(() => {
     const { walk, lunchOnly, sort } = filters;
     writeStore("rlem:filters", { walk, lunchOnly, sort });
@@ -84,6 +114,14 @@ export function App() {
     };
   }, [selected]);
 
+  useEffect(() => {
+    if (!toast) return;
+    const t = window.setTimeout(() => setToast(null), 2600);
+    return () => window.clearTimeout(t);
+  }, [toast]);
+
+  const showToast = useCallback((msg: string, icon = "✅") => setToast((t) => ({ msg, icon, n: (t?.n ?? 0) + 1 })), []);
+
   const ctx: Ctx = useMemo(() => ({ today, baselineDate: DEMO ? null : (index?.baselineDate ?? null) }), [today, index]);
   const all = places.status === "ready" ? places.data.places : [];
   const filtered = useMemo(() => applyFilters(all, filters, ctx), [all, filters, ctx]);
@@ -92,7 +130,6 @@ export function App() {
   const sorted = useMemo(() => sortPlaces(inTab, filters.sort, ctx), [inTab, filters.sort, ctx]);
   const hasRating = useMemo(() => all.some((p) => p.google?.rating != null), [all]);
 
-  // 지도에는 지금 목록 + (목록 밖이라도) 지도로 보려는 가게
   const mapPlaces = useMemo(() => {
     if (!focus || sorted.some((p) => p.id === focus.id)) return sorted;
     const extra = all.find((p) => p.id === focus.id);
@@ -102,9 +139,8 @@ export function App() {
   const selectBranch = useCallback((code: string | null) => setSelectedCode(code), []);
 
   const showOnMap = useCallback((id: string) => {
-    setView("map");
     setFocus((f) => ({ id, n: (f?.n ?? 0) + 1 }));
-    mapRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    areaMapRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, []);
 
   const showCard = useCallback(
@@ -117,168 +153,225 @@ export function App() {
         setVisible(idx + PAGE);
       }
       setHighlight(id);
-      window.setTimeout(() => {
-        document.getElementById(`place-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
-      }, 60);
+      window.setTimeout(() => document.getElementById(`place-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 60);
       window.setTimeout(() => setHighlight((h) => (h === id ? null : h)), 2600);
     },
     [sorted, visible],
   );
 
-  const tabLabel = tab === "all" ? "전체" : CATEGORY_BY_KEY[tab].label;
-  const walkLabel = filters.walk ? `도보 ${filters.walk}분` : "반경 전체";
-  const poolLabel = `${walkLabel} · ${tabLabel}${filters.lunchOnly ? " · 점심 영업" : ""} 조건의 ${sorted.length}곳에서 뽑아요`;
+  const tabLabel = tab === "all" ? "전체 랜덤" : CATEGORY_BY_KEY[tab].label;
+  const poolDesc = `${filters.walk ? `도보 ${filters.walk}분` : "반경 전체"} · ${tabLabel}${filters.lunchOnly ? " · 점심 영업" : ""}`;
   const branchInfo = selected ? index?.branches[selected.code] : undefined;
+  const sorts = (Object.keys(SORT_LABEL) as SortKey[]).filter((s) => s !== "rating" || hasRating);
 
   return (
     <div className="app">
-      <header className="masthead">
-        <div className="masthead__inner">
-          <a className="brand" href="/" aria-label="읽지 않고 먹습니다 처음으로">
-            <span className="brand__mark" aria-hidden>
-              <svg viewBox="0 0 64 64" width="40" height="40">
-                <rect width="64" height="64" rx="14" fill="currentColor" />
-                <path d="M14 18c6-2 12-2 18 2v28c-6-4-12-4-18-2z" fill="var(--paper)" />
-                <path d="M50 18c-6-2-12-2-18 2v28c6-4 12-4 18-2z" fill="var(--paper-2)" />
-                <path d="M22 26v12M26 26v12M22 32h4M42 26c-2 2-2 6 0 8v6" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" fill="none" />
-              </svg>
-            </span>
-            <span className="brand__text">
-              <span className="brand__ko">읽지 않고 먹습니다</span>
-              <span className="brand__en">Read Less, Eat More</span>
-            </span>
-          </a>
-          <p className="masthead__date">{formatDate(new Date().toISOString())}</p>
-        </div>
-        <p className="masthead__tag">책은 잠깐 덮어 두고, 점심은 제대로.</p>
-      </header>
+      <Marquee />
 
-      <main className="main">
+      <div className="wrap">
+        {/* 머리: 에디토리얼 표지 */}
+        <header className="panel panel--lg hero">
+          <div className="hero__row">
+            <div className="hero__pills">
+              <span className="pill-green">
+                <span className="ping" aria-hidden />
+                전국 식도락 출판사 · KDC-LUNCH
+              </span>
+              <button type="button" className="sticker" onClick={() => showToast("사람은 책을 만들고, 점심은 사람을 만든다!", "🏷️")}>
+                🏷️ 읽먹 에디션
+              </button>
+            </div>
+            <button
+              type="button"
+              className="bbtn bbtn--sm"
+              aria-pressed={sound}
+              onClick={() => {
+                sfx.setEnabled(!sound);
+                setSound(!sound);
+                if (!sound) sfx.spinePop();
+              }}
+            >
+              {sound ? "🔊 책장 효과음 ON" : "🔇 책장 효과음 OFF"}
+            </button>
+          </div>
+
+          <div className="hero__main">
+            <div>
+              <p className="kicker">READ LESS, EAT MORE — 전국 지점 점심 큐레이션</p>
+              <h1 className="hero__title">
+                읽지 않고 <mark>먹습니다</mark>
+              </h1>
+              <p className="hero__lead">
+                “사람은 책을 만들고, 점심은 사람을 만든다.” 오늘 근무하는 지점의 책등을 뽑아 12시의 필독 메뉴를 편찬하세요.
+              </p>
+            </div>
+            <div className="stock" aria-live="polite">
+              <div className="stock__head">
+                <span>{formatDate(new Date().toISOString())} 식사재고</span>
+                <span className="stock__ok">● {places.status === "ready" ? "정상출고" : selected ? "입고 대기" : "대기"}</span>
+              </div>
+              <div className="stock__branch">
+                <b>{selected?.label ?? "지점 미선택"}</b> <span>{selected ? "서가 연결됨" : "책등을 골라 주세요"}</span>
+              </div>
+              <div className="stock__count">
+                {places.status === "ready"
+                  ? `보유 도서(식당): ${all.length}권${!DEMO && branchInfo ? ` · ${formatDate(branchInfo.updatedAt, false)} 입고` : ""}`
+                  : places.status === "missing"
+                    ? "아직 입고 전이에요"
+                    : `전국 ${branches.length}개 지점 서가`}
+              </div>
+            </div>
+          </div>
+        </header>
+
         {DEMO && (
           <div className="banner" role="note">
-            <b>샘플 화면</b> — 실제 식당이 아닌 예시 데이터예요.{" "}
-            <a href={window.location.pathname}>실제 데이터 보기</a>
+            <b>샘플 화면</b> — 실제 식당이 아닌 예시 데이터예요. <a href={window.location.pathname}>실제 데이터 보기</a>
           </div>
         )}
 
-        <section className="hero">
-          <div className="panel hero__map" ref={mapRef}>
-            <div className="panel__bar">
-              <h2 className="section-title">지점 고르기</h2>
-              <div className="panel__tools">
-                <label className="select select--sm">
-                  <span className="sr-only">지점 선택</span>
-                  <select value={selectedCode ?? ""} onChange={(e) => selectBranch(e.target.value || null)}>
-                    <option value="">지점 선택…</option>
-                    {branches.map((b) => (
-                      <option key={b.code} value={b.code}>
-                        {b.label} ({b.region})
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <div className="seg seg--sm" role="radiogroup" aria-label="보기 방식">
-                  {(["map", "list"] as const).map((v) => (
-                    <button
-                      type="button"
-                      key={v}
-                      role="radio"
-                      aria-checked={view === v}
-                      className={`seg__btn${view === v ? " seg__btn--on" : ""}`}
-                      onClick={() => setView(v)}
-                    >
-                      {v === "map" ? "지도" : "목록"}
-                    </button>
-                  ))}
-                </div>
-              </div>
+        {/* STEP 01 지점 책장 */}
+        <section className="panel" aria-labelledby="s1">
+          <div className="step-row">
+            <div className="step-head">
+              <span className="step">STEP 01</span>
+              <h2 id="s1" className="h2">
+                전국 지점 책장 <small>(지점 선택)</small>
+              </h2>
             </div>
-            {view === "map" ? (
-              <BranchMap
-                branches={branches}
-                selected={selected}
-                places={mapPlaces}
-                walk={filters.walk}
-                focus={focus}
-                onSelectBranch={selectBranch}
-                onShowCard={showCard}
-              />
-            ) : (
-              <BranchList branches={branches} index={index} selected={selected} onSelect={selectBranch} />
-            )}
-            {selected && (
-              <div className="where">
-                <p className="where__name">
-                  📍 <b>{selected.label}</b> <span className="muted">{selected.division}</span>
-                </p>
-                <p className="where__addr muted">{selected.address}</p>
-                {places.status === "ready" && (
-                  <p className="where__meta muted">
-                    반경 {places.data.radius / 1000}km 식당 {all.length}곳
-                    {!DEMO && branchInfo && ` · ${formatDate(branchInfo.updatedAt)} 갱신`}
-                  </p>
-                )}
-              </div>
-            )}
+            <div className="seg seg--tight" role="radiogroup" aria-label="지점 고르는 방식">
+              {(["shelf", "map"] as const).map((v) => (
+                <button
+                  type="button"
+                  key={v}
+                  role="radio"
+                  aria-checked={pickView === v}
+                  className={`seg__btn${pickView === v ? " seg__btn--on" : ""}`}
+                  onClick={() => setPickView(v)}
+                >
+                  {v === "shelf" ? "📚 책장" : "🗺️ 지도"}
+                </button>
+              ))}
+            </div>
           </div>
-
-          <aside className="hero__side">
-            {!selected && (
-              <div className="panel intro">
-                <h2 className="section-title">어느 지점 근처에서 드세요?</h2>
-                <p>
-                  지도에서 지점 핀을 누르거나 목록에서 골라 주세요. 걸어서 갈 만한 식당을 모아 보여 드리고, 고르기 어려우면
-                  한 곳 뽑아 드려요.
-                </p>
-                <ul className="intro__list">
-                  <li>🍚 점심시간에 문 여는 곳 위주로</li>
-                  <li>🆕 신규 오픈 · 이벤트 · 시즌 메뉴는 AI 가 블로그 리뷰에서 찾아요</li>
-                  <li>⭐ 평점·방문자 리뷰는 네이버 지도로 바로 연결</li>
-                </ul>
-              </div>
-            )}
-            {selected && places.status === "ready" && (
-              <div className="panel">
-                <RandomPick branch={selected} pool={sorted} allPlaces={all} ctx={ctx} poolLabel={poolLabel} onShowOnMap={showOnMap} />
-              </div>
-            )}
-            {selected && places.status === "loading" && <div className="panel skeleton" aria-busy="true" />}
-            {selected && places.status === "missing" && (
-              <div className="panel intro">
-                <h2 className="section-title">아직 식당 정보를 모으는 중이에요</h2>
-                <p>
-                  이 지점의 식당 데이터가 아직 없어요. 매일 아침 자동으로 모으고, 관리자가 GitHub Actions 의 「식당 데이터
-                  수집」을 실행하면 바로 채워져요.
-                </p>
-                <p>
-                  <a className="btn" href={`?demo=1&b=${selected.code}`}>
-                    샘플 화면 먼저 보기
-                  </a>
-                </p>
-              </div>
-            )}
-          </aside>
+          <p className="hint">{pickView === "shelf" ? "책등을 클릭하면 해당 지점 서가가 열립니다 👆" : "지도에서 지점 핀을 누르세요 📍"}</p>
+          {pickView === "shelf" ? (
+            <BookShelf branches={branches} index={index} selected={selected} onSelect={selectBranch} />
+          ) : (
+            <BranchMap
+              mode="branches"
+              branches={branches}
+              selected={selected}
+              places={[]}
+              walk={0}
+              focus={null}
+              onSelectBranch={selectBranch}
+              onShowCard={() => {}}
+            />
+          )}
         </section>
+
+        {!selected && (
+          <div className="panel empty-panel">
+            <p className="h2">👆 먼저 책장에서 지점 책등을 하나 뽑아 주세요</p>
+            <p className="muted">걸어서 갈 만한 식당을 모아 오늘의 한 끼를 편찬해 드립니다.</p>
+          </div>
+        )}
+        {selected && places.status === "loading" && <div className="panel skeleton" aria-busy="true" />}
+        {selected && places.status === "missing" && (
+          <div className="panel empty-panel">
+            <p className="h2">📦 {selected.label} 서가는 아직 입고 전이에요</p>
+            <p className="muted">
+              매일 아침 자동으로 식당을 모으고, 관리자가 GitHub Actions 의 「식당 데이터 수집」을 실행하면 바로 채워집니다.
+            </p>
+            <a className="bbtn" href={`?demo=1&b=${selected.code}`}>
+              샘플 화면 먼저 보기
+            </a>
+          </div>
+        )}
 
         {selected && places.status === "ready" && (
           <>
+            {/* STEP 02 장르 책갈피 */}
+            <section className="panel" aria-labelledby="s2">
+              <div className="step-row">
+                <div className="step-head">
+                  <span className="step step--green">STEP 02</span>
+                  <h2 id="s2" className="h2">
+                    오늘의 식사 장르 책갈피
+                  </h2>
+                </div>
+                <span className="count-pill">
+                  선택된 장르: {tabLabel} ({sorted.length}권)
+                </span>
+              </div>
+              <CategoryTabs active={tab} counts={counts} onChange={setTab} />
+              <FilterBar filters={filters} onChange={setFilters} />
+            </section>
+
+            {/* STEP 03 편찬 */}
+            <PublishStage
+              key={selected.code}
+              branch={selected}
+              pool={sorted}
+              allPlaces={all}
+              ctx={ctx}
+              poolDesc={poolDesc}
+              onShowOnMap={showOnMap}
+              onToast={showToast}
+            />
+
             {config.ai && !DEMO && (
               <div className="panel">
                 <AskAI branch={selected} candidates={sorted.length ? sorted : all} onShowOnMap={showOnMap} />
               </div>
             )}
 
-            <section className="list" aria-labelledby="list-title">
-              <div className="list__head">
-                <h2 id="list-title" className="section-title">
-                  주변 식당
-                </h2>
-                <p className="muted">{sorted.length}곳</p>
+            {/* STEP 04 서가 지도 · 목록 */}
+            <section className="panel" aria-labelledby="s4">
+              <div className="step-row">
+                <div className="step-head">
+                  <span className="step step--navy">STEP 04</span>
+                  <h2 id="s4" className="h2">
+                    {selected.label} 주변 서가 <small>{sorted.length}권</small>
+                  </h2>
+                </div>
+                <label className="select">
+                  <span className="sr-only">정렬</span>
+                  <select
+                    value={filters.sort}
+                    onChange={(e) => {
+                      sfx.tagClick();
+                      setFilters({ ...filters, sort: e.target.value as SortKey });
+                    }}
+                  >
+                    {sorts.map((s) => (
+                      <option key={s} value={s}>
+                        {SORT_LABEL[s]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               </div>
-              <FilterBar filters={filters} hasRating={hasRating} onChange={setFilters} />
-              <CategoryTabs active={tab} counts={counts} onChange={setTab} />
+              <p className="hint">
+                📍 {selected.address}
+                {filters.walk ? ` · 점선 안이 도보 ${filters.walk}분 거리` : ""}
+              </p>
+              <div ref={areaMapRef}>
+                <BranchMap
+                  mode="area"
+                  branches={branches}
+                  selected={selected}
+                  places={mapPlaces}
+                  walk={filters.walk}
+                  focus={focus}
+                  onSelectBranch={selectBranch}
+                  onShowCard={showCard}
+                />
+              </div>
+
               {sorted.length === 0 ? (
-                <p className="empty">조건에 맞는 식당이 없어요. 도보 거리를 늘리거나 필터를 꺼 보세요.</p>
+                <p className="empty">조건에 맞는 식당이 없어요. 도보 거리를 늘리거나 책갈피를 바꿔 보세요.</p>
               ) : (
                 <div className="grid">
                   {sorted.slice(0, visible).map((p) => (
@@ -287,31 +380,37 @@ export function App() {
                 </div>
               )}
               {sorted.length > visible && (
-                <button type="button" className="more" onClick={() => setVisible((v) => v + PAGE)}>
-                  {sorted.length - visible}곳 더 보기
+                <button type="button" className="bbtn more" onClick={() => setVisible((v) => v + PAGE)}>
+                  {sorted.length - visible}권 더 꺼내 보기
                 </button>
               )}
             </section>
           </>
         )}
-      </main>
 
-      <footer className="footer">
-        <p>
-          식당 목록 <b>카카오 로컬</b> · 블로그 리뷰 수와 최근 글 <b>네이버 검색</b> · 요약과 새 소식 <b>Claude</b>
-          {all.some((p) => p.google) && (
-            <>
-              {" "}
-              · 평점·영업시간 <b>Google</b>
-            </>
-          )}{" "}
-          · 지도 <b>OpenStreetMap</b>
-        </p>
-        <p className="muted">
-          AI 요약과 새 소식은 블로그 글을 바탕으로 자동으로 만든 것이라 틀릴 수 있어요. 방문 전에 네이버 지도에서 영업시간을 확인해
-          주세요.
-        </p>
-      </footer>
+        <footer className="footer">
+          <p className="footer__motto">사람은 책을 만들고, 점심은 사람을 만든다 · 읽지 않고 먹습니다</p>
+          <p>
+            식당 목록 <b>카카오 로컬</b> · 블로그 리뷰 <b>네이버 검색</b> · 책 제목·사서평·새 소식 <b>Claude</b>
+            {all.some((p) => p.google) && (
+              <>
+                {" "}
+                · 평점·영업시간 <b>Google</b>
+              </>
+            )}{" "}
+            · 지도 <b>OpenStreetMap</b>
+          </p>
+          <p className="muted">
+            AI 사서평과 새 소식은 블로그 글로 자동 생성되어 틀릴 수 있어요. 방문 전 네이버 지도에서 영업시간을 확인해 주세요.
+          </p>
+        </footer>
+      </div>
+
+      {toast && (
+        <div key={toast.n} className="toast" role="status">
+          <span aria-hidden>{toast.icon}</span> {toast.msg}
+        </div>
+      )}
     </div>
   );
 }

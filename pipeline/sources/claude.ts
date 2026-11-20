@@ -13,6 +13,7 @@ const BADGE_TYPES = ["new_open", "event", "discount", "seasonal_menu", "new_menu
 
 const PlaceInsightSchema = z.object({
   id: z.string(),
+  bookTitle: z.string(),
   summary: z.string(),
   signatureMenus: z.array(z.string()),
   priceHint: z.string().nullable(),
@@ -42,6 +43,7 @@ export const SYSTEM_PROMPT = `당신은 회사 근처 점심 식당 정보를 �
 - 입력에 있는 모든 식당 id 마다 결과를 정확히 하나씩 냅니다.
 
 필드
+- bookTitle: 이 가게를 서점의 책 제목처럼 재치 있게 패러디한 제목 (15자 이내, 가게 이름은 넣지 않음. 예: "맑은 뚝배기의 고독", "돈카츠 미학 개론", "짬뽕의 뜨거운 서사").
 - summary: 가게를 한 줄로 소개 (40자 이내, 존댓말 아닌 명사형 문장. 예: "진한 사골 국물의 수육국밥집").
 - signatureMenus: 글에서 자주 언급된 대표 메뉴 최대 3개.
 - priceHint: 점심 1인 가격대가 보이면 "9천원대", "1만~1.5만원" 처럼. 없으면 null.
@@ -96,6 +98,7 @@ export function sanitizeInsight(raw: PlaceInsight): PlaceInsight {
   }
   return {
     id: raw.id,
+    bookTitle: clip(raw.bookTitle.trim().replace(/^[「『《"']+|[」』》"']+$/g, ""), 24),
     summary: clip(raw.summary.trim(), 60),
     signatureMenus: raw.signatureMenus.map((m) => clip(m.trim(), 20)).filter(Boolean).slice(0, 3),
     priceHint: raw.priceHint ? clip(raw.priceHint.trim(), 20) : null,

@@ -221,6 +221,7 @@ export async function collectBranch(
           }
           const posts = freshPosts.get(p.id) ?? [];
           p.ai = {
+            bookTitle: r.bookTitle || undefined,
             summary: r.summary,
             signatureMenus: r.signatureMenus,
             priceHint: r.priceHint,

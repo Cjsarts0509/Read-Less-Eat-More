@@ -21,12 +21,16 @@ export function directionsUrl(place: Pick<Place, "name" | "lat" | "lng">): strin
   return `https://map.kakao.com/link/to/${encodeURIComponent(place.name)},${place.lat},${place.lng}`;
 }
 
-export function shareText(place: Place, branch: Branch): string {
+export function shareText(place: Place, branch: Branch, bookTitle: string): string {
+  const menus = place.ai?.signatureMenus.length ? ` (${place.ai.signatureMenus.join(" · ")})` : "";
   const lines = [
-    `🍽️ 오늘 점심은 「${place.name}」 어때요?`,
-    `${branch.label}에서 도보 ${place.walkMin}분 · ${place.categoryPath}`,
+    `📚 [읽지 않고 먹습니다 - ${branch.label} 편찬실]`,
+    `오늘의 필독서: 《${bookTitle}》`,
+    `🍽️ 식당: ${place.name}${menus}`,
+    `🚶 도보 ${place.walkMin}분${place.ai?.priceHint ? ` · ${place.ai.priceHint}` : ""}`,
   ];
-  if (place.ai?.summary) lines.push(place.ai.summary);
-  lines.push(naverMapUrl(place));
+  if (place.ai?.summary) lines.push(`💬 사서평: ${place.ai.summary}`);
+  lines.push(`🗺️ ${naverMapUrl(place)}`);
+  lines.push("👉 완독보다 완뚝! 12시에 바로 출발하실 분?");
   return lines.join("\n");
 }

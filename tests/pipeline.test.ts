@@ -74,6 +74,7 @@ describe("Claude 출력 정리", () => {
   it("길이·개수를 자르고 날짜 없는 배지는 버린다", () => {
     const raw: PlaceInsight = {
       id: "1",
+      bookTitle: "『맑은 뚝배기의 고독』",
       summary: "가".repeat(100),
       signatureMenus: ["a", "b", "c", "d"],
       priceHint: null,
@@ -88,6 +89,7 @@ describe("Claude 출력 정리", () => {
       ],
     };
     const out = sanitizeInsight(raw);
+    expect(out.bookTitle).toBe("맑은 뚝배기의 고독");
     expect(out.summary.length).toBeLessThanOrEqual(60);
     expect(out.signatureMenus).toHaveLength(3);
     expect(out.tags).toHaveLength(4);
@@ -118,6 +120,7 @@ describe("collectBranch", () => {
             p.id,
             {
               id: p.id,
+              bookTitle: "국밥의 고독",
               summary: `${p.name} 요약`,
               signatureMenus: ["국밥"],
               priceHint: "1만원",
@@ -158,6 +161,7 @@ describe("collectBranch", () => {
     expect(a.naver?.blogTotal).toBe(120);
     expect(a.naver?.query).toBe("가까운 국밥 종로1가");
     expect(a.ai?.summary).toBe("가까운 국밥 요약");
+    expect(a.ai?.bookTitle).toBe("국밥의 고독");
     expect(a.ai?.sourceLatestPost).toBe("2026-11-15");
     expect(a.lunch).toBe("likely");
     expect(a.firstSeen).toBe(today);
@@ -223,6 +227,7 @@ describe("createClaudeAnalyzer (가짜 API 응답)", () => {
         places: [
           {
             id: "a",
+            bookTitle: "뚝배기의 고독",
             summary: "진한 국물의 국밥집",
             signatureMenus: ["국밥"],
             priceHint: "9천원대",
@@ -231,7 +236,7 @@ describe("createClaudeAnalyzer (가짜 API 응답)", () => {
             tags: ["혼밥"],
             badges: [{ type: "event", label: "리뷰 이벤트", detail: "음료 증정", evidenceDate: "2026-11-10" }],
           },
-          { id: "zzz", summary: "입력에 없던 id", signatureMenus: [], priceHint: null, lunch: "unknown", lunchNote: null, tags: [], badges: [] },
+          { id: "zzz", bookTitle: "", summary: "입력에 없던 id", signatureMenus: [], priceHint: null, lunch: "unknown", lunchNote: null, tags: [], badges: [] },
         ],
       };
       return new Response(

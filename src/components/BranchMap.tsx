@@ -6,6 +6,8 @@ import { radiusForWalk } from "../../shared/geo";
 import type { Branch, Place } from "../../shared/types";
 
 interface Props {
+  /** branches: 전국 지점 핀만 (지점 고르기) / area: 고른 지점 주변 식당까지 */
+  mode: "branches" | "area";
   branches: Branch[];
   selected: Branch | null;
   places: Place[];
@@ -30,7 +32,7 @@ function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 }
 
-export function BranchMap({ branches, selected, places, walk, focus, onSelectBranch, onShowCard }: Props) {
+export function BranchMap({ mode, branches, selected, places, walk, focus, onSelectBranch, onShowCard }: Props) {
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<L.Map | null>(null);
   const branchLayer = useRef<L.LayerGroup | null>(null);
@@ -89,12 +91,12 @@ export function BranchMap({ branches, selected, places, walk, focus, onSelectBra
   useEffect(() => {
     const m = map.current;
     if (!m) return;
-    if (selected) {
+    if (mode === "area" && selected) {
       m.flyTo([selected.lat, selected.lng], walk && walk <= 5 ? 17 : 16, { duration: 0.8 });
     } else if (branches.length) {
       m.fitBounds(L.latLngBounds(branches.map((b) => [b.lat, b.lng] as [number, number])), { padding: [24, 24] });
     }
-  }, [selected, branches, walk]);
+  }, [mode, selected, branches, walk]);
 
   // 식당 점과 도보 반경
   useEffect(() => {
@@ -102,11 +104,11 @@ export function BranchMap({ branches, selected, places, walk, focus, onSelectBra
     if (!layer) return;
     layer.clearLayers();
     markers.current.clear();
-    if (!selected) return;
+    if (!selected || mode !== "area") return;
     if (walk > 0) {
       L.circle([selected.lat, selected.lng], {
         radius: radiusForWalk(walk),
-        color: cssVar("--accent", "#D9462B"),
+        color: cssVar("--green", "#005B41"),
         weight: 1.5,
         dashArray: "4 6",
         fillOpacity: 0.04,
@@ -116,9 +118,9 @@ export function BranchMap({ branches, selected, places, walk, focus, onSelectBra
     for (const p of places) {
       const cat = CATEGORY_BY_KEY[p.category];
       const mk = L.circleMarker([p.lat, p.lng], {
-        radius: 6,
-        color: "#fff",
-        weight: 1.5,
+        radius: 6.5,
+        color: "#141414",
+        weight: 2,
         fillColor: cat.color,
         fillOpacity: 0.9,
       })
@@ -132,7 +134,7 @@ export function BranchMap({ branches, selected, places, walk, focus, onSelectBra
         .addTo(layer);
       markers.current.set(p.id, mk);
     }
-  }, [places, selected, walk]);
+  }, [mode, places, selected, walk]);
 
   // 카드에서 '지도에서 보기'
   useEffect(() => {
@@ -146,9 +148,9 @@ export function BranchMap({ branches, selected, places, walk, focus, onSelectBra
   return (
     <div className="map-wrap">
       <div ref={el} className="map" role="application" aria-label="지점과 식당 지도" />
-      {selected && (
-        <button type="button" className="map-reset" onClick={() => onSelectBranch(null)}>
-          전체 지점 보기
+      {selected && mode === "area" && (
+        <button type="button" className="map-reset" onClick={() => map.current?.flyTo([selected.lat, selected.lng], 16)}>
+          {selected.label}로 돌아가기
         </button>
       )}
     </div>

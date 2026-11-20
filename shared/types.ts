@@ -86,6 +86,8 @@ export interface GoogleInfo {
 }
 
 export interface AiInsight {
+  /** 가게를 책 제목처럼 패러디한 제목 (예: "맑은 뚝배기의 고독") */
+  bookTitle?: string;
   summary: string;
   signatureMenus: string[];
   priceHint: string | null;

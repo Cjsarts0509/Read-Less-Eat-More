@@ -1,6 +1,7 @@
 import { CATEGORY_BY_KEY } from "../../shared/categories";
 import { BADGE_META, isNewlyListed, LUNCH_LABEL } from "../../shared/insights";
 import type { Place } from "../../shared/types";
+import { bookTitleOf } from "../lib/booktitle";
 import { badgesOf, type Ctx } from "../lib/filters";
 import { directionsUrl, kakaoPlaceUrl, naverMapUrl } from "../lib/links";
 
@@ -55,7 +56,7 @@ export function PlaceLinks({ place, onShowOnMap }: { place: Place; onShowOnMap?:
         네이버 지도 <span className="btn__sub">평점·리뷰</span>
       </a>
       {!demo && (
-        <a className="btn" href={kakaoPlaceUrl(place)} target="_blank" rel="noreferrer">
+        <a className="btn btn--kakao" href={kakaoPlaceUrl(place)} target="_blank" rel="noreferrer">
           카카오맵
         </a>
       )}
@@ -82,14 +83,15 @@ export function PlaceCard({ place, ctx, highlighted, onShowOnMap }: Props) {
           {cat.emoji} {place.categoryPath || cat.label}
         </span>
         <span className="card__walk">
-          도보 <b>{place.walkMin}분</b> · {fmt.format(place.distance)}m
+          🚶 {place.walkMin}분 · {fmt.format(place.distance)}m
         </span>
       </header>
 
+      <p className="card__book">《{bookTitleOf(place)}》</p>
       <h3 className="card__name">{place.name}</h3>
       <Badges place={place} ctx={ctx} />
 
-      {ai?.summary && <p className="card__summary">{ai.summary}</p>}
+      {ai?.summary && <p className="card__summary">“{ai.summary}”</p>}
       {ai?.signatureMenus.length ? (
         <p className="card__menus">
           <span className="muted">대표 메뉴</span> {ai.signatureMenus.join(" · ")}
