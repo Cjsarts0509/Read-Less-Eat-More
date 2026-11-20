@@ -18,7 +18,8 @@
   // AI 추천 남용 방지: IP 당 1분에 10회
   "ratelimits": [{ "name": "AI_LIMITER", "namespace_id": "1001", "simple": { "limit": 10, "period": 60 } }],
   "observability": { "enabled": true },
-  // 내 도메인 연결: Cloudflare 에 등록된 도메인이면 아래 주석을 풀고 도메인을 바꾸세요
-  // "routes": [{ "pattern": "lunch.example.com", "custom_domain": true }],
+  // 내 도메인: cjslabs.kr 존이 Cloudflare 에 있어야 하고, 같은 이름의 기존 DNS 레코드가 없어야 한다.
+  // 이미 다른 사이트가 쓰고 있다면 "lunch.cjslabs.kr" 처럼 서브도메인으로 바꾸세요.
+  "routes": [{ "pattern": "cjslabs.kr", "custom_domain": true }],
   "workers_dev": true
 }

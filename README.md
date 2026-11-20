@@ -90,15 +90,17 @@
 4. `main` 브랜치에 push 하면 `Deploy` 워크플로가 `https://read-less-eat-more.<계정>.workers.dev` 로 배포
 5. **Actions → 식당 데이터 수집 → Run workflow** 로 첫 수집 (처음엔 `ai_budget` 을 크게 잡으면 빨리 채워짐)
 
-#### 내 도메인 연결
+#### 내 도메인 연결 (cjslabs.kr)
 
-도메인이 Cloudflare 에 등록(네임서버 연결)되어 있다면 `wrangler.jsonc` 의 주석을 풀고 바꾸세요.
+`wrangler.jsonc` 에 이미 들어 있습니다.
 
 ```jsonc
-"routes": [{ "pattern": "lunch.example.com", "custom_domain": true }],
+"routes": [{ "pattern": "cjslabs.kr", "custom_domain": true }],
 ```
 
-배포하면 DNS 레코드와 인증서가 자동으로 만들어집니다. (API 토큰에 해당 Zone 권한 필요)
+- `cjslabs.kr` 존이 Cloudflare 계정에 있어야 하고, API 토큰을 만들 때 Zone Resources 에 `cjslabs.kr` 을 넣어야 합니다.
+- 배포하면 DNS 레코드와 인증서가 자동으로 만들어집니다. 루트 도메인에 이미 다른 A/CNAME 레코드가 있으면 연결이 실패하니,
+  그럴 땐 레코드를 지우거나 `lunch.cjslabs.kr` 처럼 서브도메인으로 바꾸세요.
 
 #### 사내에서만 보이게
 
