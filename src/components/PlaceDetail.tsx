@@ -30,6 +30,14 @@ function LiveCheck({ place, branch, ctx, onFound }: { place: Place; branch: stri
     phase: "idle",
   });
   const tries = useRef(0);
+  const [waited, setWaited] = useState(0);
+  useEffect(() => {
+    if (state.phase !== "loading") return;
+    setWaited(0);
+    const t = window.setInterval(() => setWaited((s) => s + 1), 1000);
+    return () => window.clearInterval(t);
+  }, [state.phase]);
+  const stage = waited < 4 ? "🔎 웹에서 이 가게를 찾는 중" : waited < 10 ? "📄 맛집 정보 페이지를 읽는 중" : "✍️ 영업시간 · 메뉴를 정리하는 중";
 
   const run = async () => {
     setState({ phase: "loading" });
@@ -67,7 +75,7 @@ function LiveCheck({ place, branch, ctx, onFound }: { place: Place; branch: stri
       )}
       {state.phase === "loading" && (
         <p className="live__loading">
-          <span className="spinner" aria-hidden /> 찾는 중이에요… (10~30초)
+          <span className="spinner" aria-hidden /> {stage}… <span className="muted">{waited}초</span>
         </p>
       )}
       {state.phase === "error" && (

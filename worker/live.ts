@@ -65,7 +65,14 @@ export async function handlePlaceLive(request: Request, env: Env, search?: Searc
 
   await save("pending", row?.data ?? null);
   const run: Search =
-    search ?? createWebSearcher({ apiKey: env.ANTHROPIC_API_KEY, model: env.WEB_MODEL || env.CLAUDE_MODEL, maxUses: 3 });
+    search ??
+    createWebSearcher({
+      apiKey: env.ANTHROPIC_API_KEY,
+      model: env.LIVE_MODEL || env.WEB_MODEL || env.CLAUDE_MODEL,
+      // 사람이 기다리는 화면이라 검색 2번 · 기본 검색 도구로 짧게
+      maxUses: 2,
+      fast: true,
+    });
   let info: WebInfo | null;
   try {
     info = await run(place, todayKst());

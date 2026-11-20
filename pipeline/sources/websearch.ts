@@ -144,7 +144,7 @@ export function webSearchToolType(model: string): "web_search_20260209" | "web_s
   return /^claude-(fable|mythos|opus-5|opus-4-[678]|sonnet-5|sonnet-4-6)/.test(model) ? "web_search_20260209" : "web_search_20250305";
 }
 
-export function createWebSearcher(opts: { apiKey?: string; model?: string; maxUses?: number } = {}) {
+export function createWebSearcher(opts: { apiKey?: string; model?: string; maxUses?: number; fast?: boolean } = {}) {
   const client = new Anthropic({ apiKey: opts.apiKey, maxRetries: 3 });
   const model = opts.model || DEFAULT_MODEL;
   const fallback = supportsServerFallback(model);
@@ -161,7 +161,8 @@ export function createWebSearcher(opts: { apiKey?: string; model?: string; maxUs
         output_config: { effort: "low" },
         tools: [
           {
-            type: webSearchToolType(model),
+            // fast: 결과를 코드로 거르는 단계(동적 필터링)를 건너뛰는 기본 검색 도구 — 화면에서 기다리는 실시간 확인용
+            type: opts.fast ? "web_search_20250305" : webSearchToolType(model),
             name: "web_search",
             max_uses: opts.maxUses ?? 4,
             user_location: { type: "approximate", country: "KR", timezone: "Asia/Seoul", ...(city ? { city } : {}) },

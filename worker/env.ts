@@ -12,7 +12,8 @@ export interface Env {
   AI_LIMITER?: RateLimit;
   /** 상세 화면 실시간 확인(AI 웹 검색) 하루 최대 횟수 (기본 20) */
   LIVE_LOOKUP_DAILY?: string;
-  /** 실시간 확인에 쓸 모델 (없으면 CLAUDE_MODEL) */
+  /** 실시간 확인에 쓸 모델 (없으면 WEB_MODEL → CLAUDE_MODEL) */
+  LIVE_MODEL?: string;
   WEB_MODEL?: string;
 }
 
