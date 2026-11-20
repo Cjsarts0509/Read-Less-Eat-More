@@ -17,7 +17,7 @@
  *   WEB_SEARCH_MAX_PER_RUN (20) — 가까운 가게의 영업시간 · 휴무 · 배달 전용 여부를 Claude 웹 검색으로 조사 (0 이면 끔)
  *   WEB_MODEL               웹 조사에 쓸 모델 (CLAUDE_MODEL 과 같음)
  *   DAUM_DAILY_BUDGET (10000) — 다음 블로그 · 카페 리뷰 검색 (카카오 키, 0 이면 끔)
- *   DRIVE_RADIUS_M (4000) · MAX_DRIVE_PLACES (150) — 차량 모드용으로 도보 반경 밖 「맛집」 검색 결과를 더 모은다 (0 이면 끔)
+ *   DRIVE_RADIUS_M (6000) · MAX_DRIVE_PLACES (300) — 차량 모드용으로 도보 반경 밖 「맛집」 검색 결과를 더 모은다 (0 이면 끔)
  */
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";

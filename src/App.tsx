@@ -118,12 +118,12 @@ export function App() {
   const [selectedCode, setSelectedCode] = useState<string | null>(() => params.get("b") ?? readStore<string | null>("rlem:branch", null));
   const [pickView, setPickView] = useState<PickView>(() => readStore<PickView>("rlem:pickView", "shelf"));
   const [places, setPlaces] = useState<PlacesState>({ status: "idle" });
-  const [filters, setFilters] = useState<Filters>(() => ({
-    ...DEFAULT_FILTERS,
-    ...readStore<Partial<Filters>>("rlem:filters", {}),
-    query: "",
-    news: [],
-  }));
+  const [filters, setFilters] = useState<Filters>(() => {
+    const { v, ...saved } = readStore<Partial<Filters> & { v?: number }>("rlem:filters", {});
+    // 기본 정렬을 '요즘 많이 언급되는 순'으로 바꿨으니, 그 전에 저장된 정렬은 버린다
+    if (v !== 2) delete saved.sort;
+    return { ...DEFAULT_FILTERS, ...saved, query: "", news: [] };
+  });
   const [tab, setTab] = useState<CategoryKey | "all">("all");
   const [focus, setFocus] = useState<{ id: string; n: number } | null>(null);
   const [visible, setVisible] = useState(PAGE);
@@ -187,7 +187,7 @@ export function App() {
   useEffect(refreshMenus, [refreshMenus]);
   useEffect(() => {
     const { walk, lunchOnly, sort, mode, drive } = filters;
-    writeStore("rlem:filters", { walk, lunchOnly, sort, mode, drive, budget: filters.budget });
+    writeStore("rlem:filters", { v: 2, walk, lunchOnly, sort, mode, drive, budget: filters.budget });
     setVisible(PAGE);
   }, [filters]);
 

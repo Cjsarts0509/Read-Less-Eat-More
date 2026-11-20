@@ -9,9 +9,9 @@ export type SortKey = "distance" | "popular" | "buzz" | "inhouse" | "cheap" | "r
 export type NewsFilter = "new" | "event" | "menu" | "lunch_special";
 
 export const SORT_LABEL: Record<SortKey, string> = {
+  buzz: "요즘 많이 언급되는 순",
   distance: "가까운 순",
   popular: "리뷰 많은 순",
-  buzz: "요즘 많이 언급되는 순",
   inhouse: "사내 평점 순",
   cheap: "가격 낮은 순",
   rating: "Google 평점 순",
@@ -41,7 +41,7 @@ export interface Filters {
   budget: number;
 }
 
-export const DEFAULT_FILTERS: Filters = { mode: "walk", walk: 10, drive: 15, timeBudget: 0, lunchOnly: true, sort: "distance", query: "", news: [], budget: 0 };
+export const DEFAULT_FILTERS: Filters = { mode: "walk", walk: 10, drive: 15, timeBudget: 0, lunchOnly: true, sort: "buzz", query: "", news: [], budget: 0 };
 
 export interface Ctx {
   today: string;
@@ -136,7 +136,7 @@ export function sortPlaces(places: Place[], sort: SortKey, ctx: Ctx): Place[] {
       return by.sort(
         (a, b) =>
           (b.naver?.recentPosts ?? -1) - (a.naver?.recentPosts ?? -1) ||
-          (b.naver?.blogTotal ?? -1) - (a.naver?.blogTotal ?? -1) ||
+          (reviewCounts(b)?.total ?? -1) - (reviewCounts(a)?.total ?? -1) ||
           dist(a, b),
       );
     case "inhouse":

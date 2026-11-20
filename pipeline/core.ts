@@ -69,8 +69,8 @@ export const DEFAULT_CONFIG: CollectConfig = {
   webRefreshDays: 45,
   hoursRefreshDays: 30,
   webMaxWalkMin: 12,
-  driveRadius: 4000,
-  maxDrivePlaces: 150,
+  driveRadius: 6000,
+  maxDrivePlaces: 300,
   driveKeepDays: 30,
   extraRefreshDays: 7,
 };
@@ -251,7 +251,11 @@ export async function collectBranch(
       // 예전 형식(가게와 무관한 글까지 센 값)도 다시 조회
       .filter(
         (p) =>
-          pendingFirst.has(p.id) || !p.naver || (p.naver.v ?? 1) < NAVER_FORMAT || daysBetween(p.naver.checkedAt, today) >= cfg.naverRefreshDays,
+          pendingFirst.has(p.id) ||
+          !p.naver ||
+          (p.naver.v ?? 1) < NAVER_FORMAT ||
+          // 차로 가는 먼 곳은 일주일마다 (네이버 하루 호출 수를 아끼려고)
+          daysBetween(p.naver.checkedAt, today) >= (p.distance > cfg.radius ? Math.max(7, cfg.naverRefreshDays) : cfg.naverRefreshDays),
       )
       .sort((a, b) => {
         const pa = pendingFirst.has(a.id) ? 0 : 1;

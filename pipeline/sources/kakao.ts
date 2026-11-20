@@ -87,7 +87,26 @@ export async function collectNearby(opts: CollectOptions): Promise<KakaoPlace[]>
 const KEYWORD_ENDPOINT = "https://dapi.kakao.com/v2/local/search/keyword.json";
 
 /** 차량 모드용으로 「맛집」 같은 낱말로 찾는 검색어 (카카오 정확도순 = 지도에서 많이 찾는 곳) */
-export const DRIVE_QUERIES = ["맛집", "점심 맛집", "한식 맛집", "가성비 맛집", "백반", "국밥", "중식", "일식", "고기", "칼국수"];
+export const DRIVE_QUERIES = [
+  "맛집",
+  "점심 맛집",
+  "한식 맛집",
+  "가성비 맛집",
+  "백반",
+  "국밥",
+  "곰탕",
+  "칼국수",
+  "냉면",
+  "중식",
+  "일식",
+  "돈까스",
+  "초밥",
+  "쌀국수",
+  "샤브샤브",
+  "고기",
+  "한정식",
+  "보쌈",
+];
 
 /**
  * 낱말 검색으로 반경 안 음식점을 정확도순으로 모은다 (검색어마다 최대 45곳).

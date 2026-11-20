@@ -21,6 +21,7 @@ const DRIVES = [
   { v: 10, label: "10분" },
   { v: 15, label: "15분" },
   { v: 20, label: "20분" },
+  { v: 30, label: "30분" },
   { v: 0, label: "전체" },
 ];
 
