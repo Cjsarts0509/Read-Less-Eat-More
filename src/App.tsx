@@ -699,15 +699,17 @@ export function App() {
                         onToast={showToast}
                         weather={weatherOn ? weather : null}
                         onOpenRoom={canRoom ? openRoom : null}
+                        side={
+                          <>
+                            <button type="button" className="bbtn side-btn" onClick={() => go(2)}>
+                              <span aria-hidden>‹</span> 장르 다시 고르기
+                            </button>
+                            <button type="button" className="bbtn side-btn side-btn--go" onClick={() => go(4)}>
+                              📚 {sorted.length}곳 서가 전체 보기 <span aria-hidden>›</span>
+                            </button>
+                          </>
+                        }
                       />
-                      <div className="page-cta">
-                        <button type="button" className="bbtn bbtn--ghost" onClick={() => go(2)}>
-                          ‹ 장르 다시 고르기
-                        </button>
-                        <button type="button" className="bbtn" onClick={() => go(4)}>
-                          📚 {sorted.length}곳 서가 전체 보기 ›
-                        </button>
-                      </div>
                     </>
                   ) : (
                     notReady

@@ -5,29 +5,9 @@
  * - 막힘: 카카오톡 · 네이버 앱 안 브라우저, 사이트 권한 거부, 휴대폰 위치 꺼짐마다 푸는 방법을 보여 준다
  */
 
-export type LocationProblem = "denied" | "unavailable" | "timeout" | "unsupported";
+import { browserEnv, openInExternalBrowser, type LocationProblem } from "../lib/browser";
 
-interface Env {
-  inApp: "kakao" | "naver" | "other" | null;
-  ios: boolean;
-  samsung: boolean;
-}
-
-export function browserEnv(ua = navigator.userAgent): Env {
-  const inApp = /KAKAOTALK/i.test(ua)
-    ? "kakao"
-    : /NAVER\(inapp|NAVER\/|whale.*inapp/i.test(ua)
-      ? "naver"
-      : /Instagram|FBAN|FBAV|Line\/|DaumApps|everytimeApp/i.test(ua)
-        ? "other"
-        : null;
-  return { inApp, ios: /iPhone|iPad|iPod/i.test(ua), samsung: /SamsungBrowser/i.test(ua) };
-}
-
-/** 카카오톡 안에서 연 페이지를 기본 브라우저(크롬 · 사파리)로 다시 연다 */
-export function openInExternalBrowser(url = window.location.href): void {
-  window.location.href = `kakaotalk://web/openExternal?url=${encodeURIComponent(url)}`;
-}
+export type { LocationProblem };
 
 function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (

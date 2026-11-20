@@ -300,7 +300,7 @@ describe("차량 모드", () => {
 
 describe("위치 안내: 브라우저 구분", () => {
   it("카카오톡 · 네이버 앱 · 사파리 · 삼성 인터넷을 구분한다", async () => {
-    const { browserEnv } = await import("../src/components/LocationSheets");
+    const { browserEnv } = await import("../src/lib/browser");
     expect(browserEnv("Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 KAKAOTALK 10.8.5").inApp).toBe("kakao");
     expect(browserEnv("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0) NAVER(inapp; search; 2000; 12.10.1)")).toMatchObject({ inApp: "naver", ios: true });
     expect(browserEnv("Mozilla/5.0 (Linux; Android 14) SamsungBrowser/27.0 Chrome/125 Mobile")).toMatchObject({ inApp: null, samsung: true });

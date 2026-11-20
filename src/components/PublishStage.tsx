@@ -25,6 +25,8 @@ interface Props {
   weather?: WeatherResponse | null;
   /** 팀 투표방 열기 (저장소가 연결돼 있을 때) */
   onOpenRoom?: (() => Promise<void>) | null;
+  /** 책 오른쪽에 둘 이동 버튼 (장르 다시 고르기 · 서가 전체 보기) */
+  side?: React.ReactNode;
 }
 
 interface Leaf {
@@ -79,7 +81,7 @@ async function copyText(text: string): Promise<boolean> {
   }
 }
 
-export function PublishStage({ branch, pool: rawPool, allPlaces, ctx, poolDesc, onShowOnMap, onToast, weather, onOpenRoom }: Props) {
+export function PublishStage({ branch, pool: rawPool, allPlaces, ctx, poolDesc, onShowOnMap, onToast, weather, onOpenRoom, side }: Props) {
   // 폐업 · 휴업 단서가 있는 곳은 뽑지 않는다
   const pool = useMemo(
     () => rawPool.filter((p) => p.lunch !== "closed" && closureOf(p, ctx.today)?.state !== "closed"),
@@ -509,6 +511,7 @@ export function PublishStage({ branch, pool: rawPool, allPlaces, ctx, poolDesc, 
             </div>
           )}
         </div>
+        {side && <div className="stage__side">{side}</div>}
       </div>
     </section>
   );

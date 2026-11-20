@@ -4341,7 +4341,7 @@ body.modal-open {
   .app--paged .stage > .book {
     height: auto;
     min-height: min(480px, calc(100% - 8px));
-    margin: auto;
+    margin: auto 0;
   }
 }
 
@@ -4380,4 +4380,48 @@ body.modal-open {
 .loc__main {
   min-height: 48px;
   font-size: 15px;
+}
+
+/* ---------- 편찬대: 책 오른쪽 이동 버튼 ---------- */
+
+.stage__side {
+  flex: none;
+  align-self: center;
+  display: grid;
+  gap: 10px;
+  width: 196px;
+  margin-left: 20px;
+  z-index: 2;
+}
+
+.side-btn {
+  width: 100%;
+  min-height: 46px;
+  justify-content: flex-start;
+  white-space: normal;
+  text-align: left;
+  line-height: 1.3;
+}
+
+.side-btn--go {
+  background: var(--mustard);
+}
+
+/* 편찬대가 좁으면 버튼을 책 아래로 */
+@media (max-width: 1279px) {
+  .stage {
+    flex-wrap: wrap;
+  }
+  .stage__side {
+    width: 100%;
+    margin: 12px 0 0;
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* 휴대폰은 아래 독이 대신한다 */
+@media (max-width: 760px) {
+  .stage__side {
+    display: none;
+  }
 }
