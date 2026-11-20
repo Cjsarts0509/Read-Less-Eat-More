@@ -85,13 +85,13 @@ function formatDate(iso: string, withWeekday = true): string {
   }).format(new Date(iso));
 }
 
-/** 맨 위 띠지: 오늘의 먹는 농담 10개 (날마다 바뀐다) */
+/** 맨 위 띠지: 오늘의 먹는 얘기 20개 (날마다 바뀐다) */
 function Marquee({ today }: { today: string }) {
-  const jokes = useMemo(() => jokesOfDay(today, 10), [today]);
+  const jokes = useMemo(() => jokesOfDay(today, 20), [today]);
   const items = [...jokes, ...jokes];
   return (
     <div className="marquee" aria-hidden>
-      <div className="marquee__track" style={{ animationDuration: `${jokes.length * 7}s` }}>
+      <div className="marquee__track" style={{ animationDuration: `${jokes.length * 4.5}s` }}>
         {items.map((t, i) => (
           <span key={i} className="marquee__item">
             {t}

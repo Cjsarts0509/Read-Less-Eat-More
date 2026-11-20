@@ -149,12 +149,12 @@ describe("recentReviewPosts", () => {
 });
 
 describe("jokesOfDay", () => {
-  it("하루 10개, 같은 날은 같고 이웃한 날끼리 겹치지 않는다", () => {
-    expect(JOKES.length).toBe(100);
+  it("하루 20개, 같은 날은 같고 이웃한 날끼리 겹치지 않는다", () => {
+    expect(JOKES.length).toBe(400);
     expect(new Set(JOKES).size).toBe(JOKES.length);
     const a = jokesOfDay("2026-11-20");
-    expect(a).toHaveLength(10);
-    expect(new Set(a).size).toBe(10);
+    expect(a).toHaveLength(20);
+    expect(new Set(a).size).toBe(20);
     expect(jokesOfDay("2026-11-20")).toEqual(a);
     const b = jokesOfDay("2026-11-21");
     expect(b.filter((j) => a.includes(j))).toHaveLength(0);
