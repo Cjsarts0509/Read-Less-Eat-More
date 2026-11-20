@@ -152,7 +152,7 @@ function Nook() {
           <b>
             <span className="bay__icon">☕</span> 열람 코너
           </b>
-          <small>점심시간 11:30 – 13:00</small>
+          <small>점심시간 11:30 – 14:00</small>
         </span>
       </header>
       <div className="bay__books nook">

@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { toKmaGrid, weatherMood } from "../shared/kma";
 import { adRatioOf, closureOf, computeLunch, computePriceChange, mergePriceHistory, recentReviewPosts } from "../shared/insights";
 import { estimateLunchTime } from "../shared/time";
+import { JOKES, jokesOfDay } from "../shared/jokes";
+import { makeRungs, traceLadder } from "../shared/ladder";
 import type { Place, PricePoint } from "../shared/types";
 import { extractJson, toWebInfo } from "../pipeline/sources/websearch";
 
@@ -143,5 +145,31 @@ describe("recentReviewPosts", () => {
       extraReviews: undefined,
     });
     expect(out.map((p) => p.title)).toEqual(["2월 2화", "점심 기록"]);
+  });
+});
+
+describe("jokesOfDay", () => {
+  it("하루 10개, 같은 날은 같고 이웃한 날끼리 겹치지 않는다", () => {
+    expect(JOKES.length).toBeGreaterThanOrEqual(300);
+    expect(new Set(JOKES).size).toBe(JOKES.length);
+    const a = jokesOfDay("2026-11-20");
+    expect(a).toHaveLength(10);
+    expect(new Set(a).size).toBe(10);
+    expect(jokesOfDay("2026-11-20")).toEqual(a);
+    const b = jokesOfDay("2026-11-21");
+    expect(b.filter((j) => a.includes(j))).toHaveLength(0);
+  });
+});
+
+describe("ladder", () => {
+  it("같은 줄에 이웃한 막대가 없고, 출발점마다 도착점이 하나씩 (순열)", () => {
+    for (let n = 2; n <= 6; n++) {
+      for (let t = 0; t < 20; t++) {
+        const rungs = makeRungs(n, 8);
+        for (const row of rungs) for (let c = 1; c < row.length; c++) expect(row[c] && row[c - 1]).toBe(false);
+        const ends = Array.from({ length: n }, (_, i) => traceLadder(rungs, i).end);
+        expect(new Set(ends).size).toBe(n);
+      }
+    }
   });
 });

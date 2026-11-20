@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import type { BalanceResponse } from "../../shared/api";
 import { CATEGORY_BY_KEY } from "../../shared/categories";
 import { balanceOfDay, fortuneOf } from "../../shared/fun";
@@ -6,8 +7,18 @@ import type { CategoryKey } from "../../shared/types";
 import { fetchBalance, memberKey, voteBalance } from "../lib/api";
 import { sfx } from "../lib/sfx";
 import { readStore, writeStore } from "../lib/storage";
+import { Ladder, WorldCup } from "./MiniGames";
 
-type Tab = "fortune" | "balance";
+type GameKey = "balance" | "fortune" | "worldcup" | "ladder";
+
+const GAMES: Array<{ key: GameKey; icon: string; label: string }> = [
+  { key: "balance", icon: "⚖️", label: "밸런스 게임" },
+  { key: "fortune", icon: "🥠", label: "점심 운세" },
+  { key: "worldcup", icon: "🏆", label: "메뉴 월드컵" },
+  { key: "ladder", icon: "🪜", label: "사다리 타기" },
+];
+
+type Summaries = Partial<Record<GameKey, string>>;
 
 interface Props {
   today: string;
@@ -18,42 +29,138 @@ interface Props {
   onToast: (msg: string, icon?: string) => void;
 }
 
-/** 머리의 심심풀이: 오늘의 점심 운세 · 오늘의 밸런스 게임 */
+const pctOf = (d: BalanceResponse, k: "a" | "b") => {
+  const total = d.counts.a + d.counts.b;
+  return total ? Math.round((d.counts[k] / total) * 100) : 0;
+};
+
+/** 표시용 짧은 이름: "🍜 짜장면" → "짜장면" */
+const bare = (s: string) => s.replace(/^\S+\s/, "");
+
+/** 머리의 심심풀이: 게임 버튼 넷 + 오른쪽에 오늘 결과 요약. 누르면 팝업으로 연다 */
 export function FunCorner({ today, canVote, onLuckyGenre, onToast }: Props) {
-  const [tab, setTab] = useState<Tab>(() => readStore<Tab>("lmp:funTab", "fortune"));
-  useEffect(() => writeStore("lmp:funTab", tab), [tab]);
+  const storeKey = `lmp:fun:${today}`;
+  const [open, setOpen] = useState<GameKey | null>(null);
+  const [sums, setSums] = useState<Summaries>(() => readStore<Summaries>(storeKey, {}));
+  const q = balanceOfDay(today);
+
+  const save = (k: GameKey, v: string) =>
+    setSums((s) => {
+      const next = { ...s, [k]: v };
+      writeStore(storeKey, next);
+      return next;
+    });
+
+  // 오늘 운세를 이미 열었으면 요약에 바로
+  const fortuneOpened = readStore(`lmp:fortune:${today}`, false);
+  const f = fortuneOf(today, memberKey());
+  const fortuneSum = fortuneOpened ? `${CATEGORY_BY_KEY[f.genre].emoji} ${CATEGORY_BY_KEY[f.genre].label} · ${f.score}점` : undefined;
+
+  // 밸런스 게임: 이미 투표했으면 지금 비율로 요약
+  useEffect(() => {
+    if (!canVote) return;
+    let alive = true;
+    void fetchBalance()
+      .then((d) => {
+        if (alive && d.mine) save("balance", `${bare(d.mine === "a" ? q.a : q.b)} ${pctOf(d, d.mine)}%`);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canVote, today]);
+
+  const placeholder: Record<GameKey, string> = {
+    balance: `${bare(q.a)} vs ${bare(q.b)}`,
+    fortune: "하루 한 번 · 미개봉",
+    worldcup: "8강 대기 중",
+    ladder: "커피 내기 한 판?",
+  };
+  const summary = (k: GameKey) => (k === "fortune" ? fortuneSum : sums[k]);
+  const game = GAMES.find((g) => g.key === open);
+  const lucky = onLuckyGenre
+    ? (k: CategoryKey) => {
+        setOpen(null);
+        onLuckyGenre(k);
+      }
+    : null;
 
   return (
-    <section className="fun" aria-label="심심풀이">
-      <div className="fun__tabs" role="tablist">
-        {(
-          [
-            ["fortune", "🥠 점심 운세"],
-            ["balance", "⚖️ 밸런스 게임"],
-          ] as const
-        ).map(([k, label]) => (
-          <button
-            type="button"
-            key={k}
-            role="tab"
-            aria-selected={tab === k}
-            className={`fun__tab${tab === k ? " fun__tab--on" : ""}`}
-            onClick={() => setTab(k)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      {tab === "fortune" ? (
-        <Fortune today={today} onLuckyGenre={onLuckyGenre} />
-      ) : (
-        <Balance today={today} canVote={canVote} onToast={onToast} />
+    <>
+      <section className="fun fun--grid" aria-label="심심풀이">
+        {GAMES.map((g) => {
+          const s = summary(g.key);
+          return (
+            <div key={g.key} className="fun__item">
+              <button
+                type="button"
+                className="fun__btn"
+                onClick={() => {
+                  sfx.tagClick();
+                  setOpen(g.key);
+                }}
+              >
+                <span aria-hidden>{g.icon}</span> {g.label}
+              </button>
+              <span className={`fun__sum${s ? "" : " fun__sum--empty"}`} title={s ?? placeholder[g.key]}>
+                {s ?? placeholder[g.key]}
+              </span>
+            </div>
+          );
+        })}
+      </section>
+
+      {game && (
+        <GameModal title={`${game.icon} ${game.label}`} onClose={() => setOpen(null)}>
+          {game.key === "fortune" && <Fortune today={today} onLuckyGenre={lucky} onOpened={() => setSums((s) => ({ ...s }))} />}
+          {game.key === "balance" && <Balance today={today} canVote={canVote} onToast={onToast} onResult={(v) => save("balance", v)} />}
+          {game.key === "worldcup" && <WorldCup onResult={(v) => save("worldcup", v)} onLuckyGenre={lucky} />}
+          {game.key === "ladder" && <Ladder onResult={(v) => save("ladder", v)} />}
+        </GameModal>
       )}
-    </section>
+    </>
   );
 }
 
-function Fortune({ today, onLuckyGenre }: { today: string; onLuckyGenre?: ((k: CategoryKey) => void) | null }) {
+/** 게임 팝업 (휴대폰은 아래에서 올라오는 시트) */
+function GameModal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    document.body.classList.add("modal-open");
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.classList.remove("modal-open");
+    };
+  }, [onClose]);
+
+  return createPortal(
+    <div className="sheet-backdrop" onClick={onClose}>
+      <div className="sheet sheet--game no-swipe" role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()}>
+        <div className="sheet__grip" aria-hidden />
+        <header className="sheet__head">
+          <h2 className="sheet__title">{title}</h2>
+          <button type="button" className="sheet__close" onClick={onClose} aria-label="닫기">
+            ✕
+          </button>
+        </header>
+        <div className="sheet__body">{children}</div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+function Fortune({
+  today,
+  onLuckyGenre,
+  onOpened,
+}: {
+  today: string;
+  onLuckyGenre?: ((k: CategoryKey) => void) | null;
+  onOpened: () => void;
+}) {
   const key = `lmp:fortune:${today}`;
   const [open, setOpen] = useState<boolean>(() => readStore(key, false));
   const [cracking, setCracking] = useState(false);
@@ -71,6 +178,7 @@ function Fortune({ today, onLuckyGenre }: { today: string; onLuckyGenre?: ((k: C
           window.setTimeout(() => {
             setOpen(true);
             writeStore(key, true);
+            onOpened();
             sfx.revealChime();
           }, 650);
         }}
@@ -79,7 +187,7 @@ function Fortune({ today, onLuckyGenre }: { today: string; onLuckyGenre?: ((k: C
           🥠
         </span>
         <span>
-          <b>오늘의 점심 운세 열기</b>
+          <b>포춘 쿠키를 깨서 오늘의 점심 운세 보기</b>
           <span className="muted"> · 하루 한 번</span>
         </span>
       </button>
@@ -88,23 +196,46 @@ function Fortune({ today, onLuckyGenre }: { today: string; onLuckyGenre?: ((k: C
   return (
     <div className="fortune">
       <p className="fortune__line">“{f.line}”</p>
-      <p className="fortune__meta">
-        행운의 장르{" "}
-        <b>
-          {cat.emoji} {cat.label}
-        </b>{" "}
-        · 방향 <b>{f.direction}</b> · 출발 <b>{f.departAt}</b> · 점심운 <b>{f.score}점</b>
-      </p>
+      <dl className="fortune__facts">
+        <div>
+          <dt>행운의 장르</dt>
+          <dd>
+            {cat.emoji} {cat.label}
+          </dd>
+        </div>
+        <div>
+          <dt>행운의 방향</dt>
+          <dd>{f.direction}</dd>
+        </div>
+        <div>
+          <dt>출발 시각</dt>
+          <dd>{f.departAt}</dd>
+        </div>
+        <div>
+          <dt>점심운</dt>
+          <dd>{f.score}점</dd>
+        </div>
+      </dl>
       {onLuckyGenre && (
-        <button type="button" className="linkish fortune__go" onClick={() => onLuckyGenre(f.genre)}>
-          {cat.label}으로 오늘의 한 끼 편찬하기 ›
+        <button type="button" className="bbtn bbtn--green bbtn--block" onClick={() => onLuckyGenre(f.genre)}>
+          {cat.emoji} {cat.label}으로 오늘의 한 끼 편찬하기 ›
         </button>
       )}
     </div>
   );
 }
 
-function Balance({ today, canVote, onToast }: { today: string; canVote: boolean; onToast: (m: string, i?: string) => void }) {
+function Balance({
+  today,
+  canVote,
+  onToast,
+  onResult,
+}: {
+  today: string;
+  canVote: boolean;
+  onToast: (m: string, i?: string) => void;
+  onResult: (summary: string) => void;
+}) {
   const q = balanceOfDay(today);
   const [data, setData] = useState<BalanceResponse | null>(null);
   const [busy, setBusy] = useState(false);
@@ -124,7 +255,9 @@ function Balance({ today, canVote, onToast }: { today: string; canVote: boolean;
     if (!canVote) return onToast("투표는 실제 사이트에서만 남길 수 있어요.", "⚖️");
     setBusy(true);
     try {
-      setData(await voteBalance(choice));
+      const d = await voteBalance(choice);
+      setData(d);
+      onResult(`${bare(choice === "a" ? q.a : q.b)} ${pctOf(d, choice)}%`);
       sfx.tagClick();
     } catch (err) {
       onToast((err as Error).message, "⚠️");
@@ -134,12 +267,14 @@ function Balance({ today, canVote, onToast }: { today: string; canVote: boolean;
   };
 
   const total = data ? data.counts.a + data.counts.b : 0;
-  const pct = (n: number) => (total ? Math.round((n / total) * 100) : 0);
   const voted = data?.mine ?? null;
 
   return (
     <div className="balance">
-      <p className="balance__q">{q.q}</p>
+      <p className="balance__q">
+        {q.q}
+        {voted && <span className="balance__total muted"> · 동료 {total}명 투표</span>}
+      </p>
       <div className="balance__opts">
         {(["a", "b"] as const).map((k) => (
           <button
@@ -150,13 +285,12 @@ function Balance({ today, canVote, onToast }: { today: string; canVote: boolean;
             onClick={() => void vote(k)}
             aria-pressed={voted === k}
           >
-            {voted && <span className="balance__bar" style={{ width: `${pct(data!.counts[k])}%` }} aria-hidden />}
+            {voted && <span className="balance__bar" style={{ width: `${pctOf(data!, k)}%` }} aria-hidden />}
             <span className="balance__label">{k === "a" ? q.a : q.b}</span>
-            {voted && <b className="balance__pct">{pct(data!.counts[k])}%</b>}
+            {voted && <b className="balance__pct">{pctOf(data!, k)}%</b>}
           </button>
         ))}
       </div>
-      <p className="balance__foot muted">{voted ? `동료 ${total}명 투표 · 다시 누르면 바꿀 수 있어요` : "골라야 동료들의 선택이 보여요"}</p>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { CATEGORY_BY_KEY } from "../shared/categories";
+import { jokesOfDay } from "../shared/jokes";
 import type { Branch, BranchPlaces, CategoryKey, DataIndex } from "../shared/types";
 import type { MenuReport, ReviewSummary, WeatherResponse } from "../shared/api";
 import { nearestBranch, radiusForDrive, radiusForWalk, WALK_RADIUS_M } from "../shared/geo";
@@ -75,14 +76,6 @@ const DEMO_WEATHER: WeatherResponse = {
   boost: { keywords: ["국밥", "탕", "찌개", "칼국수", "짬뽕", "라멘", "우동", "샤브"], maxWalk: 7, label: "비 오는 날" },
 };
 
-const TICKER = [
-  "📚 사람은 책을 만들고, 점심은 사람을 만든다",
-  "점심은 사람을 만든다 · LUNCH MAKES THE PERSON",
-  "완독보다 완뚝! 절판은 있어도 절식은 없다",
-  "주의: 3회 이상 재추첨 시 변심 반품 불가 도장이 날인됩니다",
-  "신규 오픈 · 이벤트 · 시즌 메뉴는 AI 사서가 매일 아침 입고",
-];
-
 function formatDate(iso: string, withWeekday = true): string {
   return new Intl.DateTimeFormat("ko-KR", {
     month: "long",
@@ -92,11 +85,13 @@ function formatDate(iso: string, withWeekday = true): string {
   }).format(new Date(iso));
 }
 
-function Marquee() {
-  const items = [...TICKER, ...TICKER];
+/** 맨 위 띠지: 오늘의 먹는 농담 10개 (날마다 바뀐다) */
+function Marquee({ today }: { today: string }) {
+  const jokes = useMemo(() => jokesOfDay(today, 10), [today]);
+  const items = [...jokes, ...jokes];
   return (
     <div className="marquee" aria-hidden>
-      <div className="marquee__track">
+      <div className="marquee__track" style={{ animationDuration: `${jokes.length * 7}s` }}>
         {items.map((t, i) => (
           <span key={i} className="marquee__item">
             {t}
@@ -535,7 +530,7 @@ export function App() {
 
   return (
     <div className={`app${bigView && !ROOM ? " app--big" : ""}${compactHead && !ROOM ? " app--compact" : ""}${ROOM ? "" : " app--paged"}`}>
-      <Marquee />
+      <Marquee today={today} />
 
       <div className="wrap">
         {/* 머리: 제목 · 심심풀이 · 오늘의 서가 */}
@@ -564,13 +559,13 @@ export function App() {
                   {sound ? "🔊" : "🔇"}
                 </button>
                 <button type="button" className="fun-open" onClick={() => setFunOpen(true)}>
-                  🥠 운세 · 밸런스
+                  🎲 심심풀이
                 </button>
               </div>
               <h1 className="hero__title">
                 점심은 <mark>사람을</mark> 만든다
               </h1>
-              <p className="hero__lead">사람은 책을 만들고, 점심은 사람을 만든다. 오늘 근무하는 지점에서 12시의 필독 메뉴를 편찬하세요.</p>
+              <p className="hero__lead">사람은 책을 만들고, 점심은 사람을 만든다. 오늘 근무하는 지점에서 필독 메뉴를 편찬하세요.</p>
             </div>
 
             <div className="hero__fun">{funCorner}</div>
@@ -901,7 +896,7 @@ export function App() {
           <div className="sheet sheet--fun no-swipe" role="dialog" aria-modal="true" aria-label="심심풀이" onClick={(e) => e.stopPropagation()}>
             <div className="sheet__grip" aria-hidden />
             <header className="sheet__head">
-              <h2 className="sheet__title">🥠 심심풀이</h2>
+              <h2 className="sheet__title">🎲 심심풀이</h2>
               <button type="button" className="sheet__close" onClick={() => setFunOpen(false)} aria-label="닫기">
                 ✕
               </button>
