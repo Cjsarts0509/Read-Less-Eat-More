@@ -20,7 +20,7 @@
   // AI 호출 남용 방지: IP · 기능마다 1분에 10회
   "ratelimits": [{ "name": "AI_LIMITER", "namespace_id": "1001", "simple": { "limit": 10, "period": 60 } }],
   "observability": { "enabled": true },
-  // 내 도메인은 여기 적지 않고 GitHub 저장소 변수 CUSTOM_DOMAIN(예: cjslabs.kr)으로 붙인다 (deploy.yml 의 --domain).
+  // 내 도메인(기본 lunch.cjs0509.xyz)은 여기 적지 않고 deploy.yml 의 --domain 으로 붙인다. 바꾸려면 저장소 변수 CUSTOM_DOMAIN.
   // 도메인이 Cloudflare 에 등록되기 전에도 workers.dev 주소로는 배포되게 하려는 것.
   "workers_dev": true
 }

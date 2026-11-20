@@ -332,3 +332,46 @@ describe("웹 검색 대상", () => {
     expect(searched).toEqual(["a"]);
   });
 });
+
+describe("네이버 검색 API (NAVER API HUB 이전)", () => {
+  it("새 주소 · 새 헤더를 먼저 쓰고, 되면 그 방식을 기억한다", async () => {
+    const { searchBlog, resetNaverMode } = await import("../pipeline/sources/naver");
+    resetNaverMode();
+    const calls: Array<{ url: string; headers: Record<string, string> }> = [];
+    const fetchImpl = async (url: string, init?: RequestInit) => {
+      calls.push({ url, headers: init?.headers as Record<string, string> });
+      return new Response(
+        JSON.stringify({ total: 42, items: [{ title: "<b>국밥</b> 후기", link: "https://blog/1", description: "맛있다", bloggername: "a", postdate: "20261118" }] }),
+      );
+    };
+    const res = await searchBlog("국밥 상암동", { clientId: "id", clientSecret: "secret" }, fetchImpl);
+    expect(res.total).toBe(42);
+    expect(res.posts[0]).toMatchObject({ title: "국밥 후기", date: "2026-11-18" });
+    expect(calls[0]!.url).toContain("https://naverapihub.apigw.ntruss.com/search/v1/blog?");
+    expect(calls[0]!.url).toContain("format=json");
+    expect(calls[0]!.headers).toEqual({ "X-NCP-APIGW-API-KEY-ID": "id", "X-NCP-APIGW-API-KEY": "secret" });
+  });
+
+  it("새 방식이 인증 실패면 예전 방식으로 한 번 더", async () => {
+    const { searchBlog, resetNaverMode } = await import("../pipeline/sources/naver");
+    resetNaverMode();
+    const urls: string[] = [];
+    const fetchImpl = async (url: string) => {
+      urls.push(url);
+      if (url.includes("ntruss")) return new Response('{"error":"auth"}', { status: 401 });
+      return new Response(JSON.stringify({ total: 3, items: [] }));
+    };
+    const res = await searchBlog("q", { clientId: "id", clientSecret: "s" }, fetchImpl);
+    expect(res.total).toBe(3);
+    expect(urls[1]).toContain("https://openapi.naver.com/v1/search/blog.json");
+    // 다음 호출부터는 예전 방식만
+    await searchBlog("q2", { clientId: "id", clientSecret: "s" }, fetchImpl);
+    expect(urls).toHaveLength(3);
+    resetNaverMode();
+  });
+
+  it("total 이 없는 응답이면 받은 글 수", async () => {
+    const { parseBlogResponse } = await import("../pipeline/sources/naver");
+    expect(parseBlogResponse({ items: [{ title: "a", link: "l", description: "", bloggername: "", postdate: "20261101" }] }).total).toBe(1);
+  });
+});

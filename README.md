@@ -74,7 +74,7 @@
 | 이름 | 어디서 | 필수 | 비용 |
 | --- | --- | --- | --- |
 | `KAKAO_REST_API_KEY` | [Kakao Developers](https://developers.kakao.com) → 앱 만들기 → 앱 키의 **REST API 키** (앱 설정에서 「카카오맵」 사용을 켜야 할 수 있음) | ✅ | 무료 한도 안 |
-| `NAVER_CLIENT_ID` / `NAVER_CLIENT_SECRET` | [NAVER Developers](https://developers.naver.com/apps) → 애플리케이션 등록 → 사용 API 「검색」 | 권장 | 무료 (하루 25,000회) |
+| `NAVER_CLIENT_ID` / `NAVER_CLIENT_SECRET` | 네이버 클라우드(ncloud.com) → **NAVER API HUB** → 애플리케이션 등록 → 검색(블로그) 추가 → 인증 정보의 Client ID · Client Secret. 예전 developers.naver.com 키도 자동으로 시도함 | 권장 | 무료 한도 안 |
 | `ANTHROPIC_API_KEY` | [Claude Console](https://platform.claude.com) → API Keys | 권장 | 아래 '비용' 참고 |
 | `SUPABASE_SECRET_KEY` | Supabase `Cjs0509arts` 프로젝트 → Project Settings → API Keys → **Secret keys** 만들기 (`sb_secret_…`) | 투표방 · 메뉴판 · 날씨에 필요 | 무료 한도 안 |
 | `GOOGLE_PLACES_API_KEY` | Google Cloud → Places API (New) | 선택 | 별점·영업시간 필드는 유료 (월 무료 한도 있음) |
@@ -104,13 +104,13 @@
 4. `main` 브랜치에 push 하면 `Deploy` 워크플로가 `https://lunch-makes-the-person.cjs0509.workers.dev` 로 배포
 5. **Actions → 식당 데이터 수집 → Run workflow** 로 첫 수집 (처음엔 `ai_budget` 을 크게 잡으면 빨리 채워짐)
 
-#### 내 도메인 연결 (cjslabs.kr)
+#### 내 도메인 연결 (lunch.cjs0509.xyz)
 
-1. Cloudflare 대시보드 → **도메인 추가**로 `cjslabs.kr` 을 등록하고, 도메인을 산 곳(가비아 등)에서 네임서버를 Cloudflare 가 알려 준 두 개로 바꿉니다. 「활성」이 되면 다음 단계로.
-2. GitHub → Settings → Secrets and variables → Actions → **Variables** 에 `CUSTOM_DOMAIN` = `cjslabs.kr` 을 넣습니다.
-3. Actions → Deploy → Run workflow. 배포 때 `wrangler deploy --domain cjslabs.kr` 로 DNS 레코드와 인증서가 자동으로 만들어집니다.
+배포할 때마다 `wrangler deploy --domain lunch.cjs0509.xyz` 로 붙고, DNS 레코드와 인증서는 Cloudflare 가 자동으로 만듭니다.
+`cjs0509.xyz` 존이 같은 Cloudflare 계정에 있고, API 토큰에 그 존의 DNS Write · Zone Read · Workers Routes Write 권한이 있어야 합니다.
 
-도메인을 붙이기 전에도 `https://lunch-makes-the-person.cjs0509.workers.dev` 로 접속할 수 있습니다. 루트 도메인에 이미 다른 A/CNAME 레코드가 있으면 연결이 실패하니, 그럴 땐 `lunch.cjslabs.kr` 처럼 서브도메인을 쓰세요.
+다른 주소를 쓰려면 GitHub → Settings → Secrets and variables → Actions → **Variables** 에 `CUSTOM_DOMAIN` (예: `cjs0509.xyz`) 을 넣고 Deploy 를 다시 실행하세요.
+workers.dev 주소 `https://lunch-makes-the-person.cjs0509.workers.dev` 로도 늘 접속할 수 있습니다.
 
 #### 사내에서만 보이게
 

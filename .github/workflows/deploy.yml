@@ -41,7 +41,7 @@ jobs:
       - name: Cloudflare Workers 배포
         id: deploy
         if: env.HAS_CF == 'true'
-        # 저장소 변수 CUSTOM_DOMAIN 이 있으면 그 도메인에도 연결 (도메인이 Cloudflare 에 등록돼 있어야 함)
+        # 기본 lunch.cjs0509.xyz 에 연결. 바꾸려면 저장소 변수 CUSTOM_DOMAIN (도메인이 같은 Cloudflare 계정에 있어야 함)
         run: |
           if [ -n "$CUSTOM_DOMAIN" ]; then
             npx wrangler deploy --domain "$CUSTOM_DOMAIN"
@@ -51,7 +51,7 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CUSTOM_DOMAIN: ${{ vars.CUSTOM_DOMAIN }}
+          CUSTOM_DOMAIN: ${{ vars.CUSTOM_DOMAIN || 'lunch.cjs0509.xyz' }}
 
       - name: AI 추천용 키를 워커 시크릿으로 동기화
         if: ${{ !cancelled() && env.HAS_CF == 'true' && env.HAS_AI == 'true' }}
