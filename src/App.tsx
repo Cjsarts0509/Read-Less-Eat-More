@@ -7,6 +7,7 @@ import { BookShelf } from "./components/BookShelf";
 import { BranchMap } from "./components/BranchMap";
 import { CategoryTabs, FilterBar } from "./components/FilterBar";
 import { FunCorner } from "./components/FunCorner";
+import { LocationAsk, LocationHelp, type LocationProblem } from "./components/LocationSheets";
 import { PlaceCard } from "./components/PlaceCard";
 import { PlaceDetail } from "./components/PlaceDetail";
 import { LibrarianChat } from "./components/LibrarianChat";
@@ -116,6 +117,8 @@ export function App() {
   const [menus, setMenus] = useState<Record<string, MenuReport[]>>({});
   const [reviews, setReviews] = useState<Record<string, ReviewSummary>>({});
   const [locating, setLocating] = useState(false);
+  /** 위치 안내 창: 먼저 묻기 · 막혔을 때 푸는 방법 */
+  const [locSheet, setLocSheet] = useState<{ kind: "ask" } | { kind: "help"; problem: LocationProblem } | null>(null);
   const [selectedCode, setSelectedCode] = useState<string | null>(() => params.get("b") ?? readStore<string | null>("rlem:branch", null));
   const [pickView, setPickView] = useState<PickView>(() => readStore<PickView>("rlem:pickView", "shelf"));
   const [places, setPlaces] = useState<PlacesState>({ status: "idle" });
@@ -307,11 +310,21 @@ export function App() {
     selectedRef.current = selectedCode;
   }, [selectedCode]);
   const locate = useCallback(
-    (mode: "ask" | "silent") => {
-      if (!("geolocation" in navigator) || !branches.length) {
-        if (mode === "ask") showToast("이 브라우저는 위치를 알려 주지 않아요. 책장에서 골라 주세요.", "⚠️");
+    async (mode: "ask" | "silent") => {
+      if (!branches.length) return;
+      if (!("geolocation" in navigator) || !window.isSecureContext) {
+        if (mode === "ask") setLocSheet({ kind: "help", problem: "unsupported" });
         return;
       }
+      // 이미 거부된 사이트는 브라우저가 묻지도 않고 막는다 → 바로 푸는 방법을 보여 준다
+      if (mode === "ask") {
+        const st = await navigator.permissions?.query({ name: "geolocation" as PermissionName }).catch(() => null);
+        if (st?.state === "denied") {
+          setLocSheet({ kind: "help", problem: "denied" });
+          return;
+        }
+      }
+      setLocSheet(null);
       setLocating(true);
       navigator.geolocation.getCurrentPosition(
         (pos) => {
@@ -335,9 +348,12 @@ export function App() {
         },
         (err) => {
           setLocating(false);
-          if (mode === "ask") showToast(err.code === 1 ? "위치 권한이 꺼져 있어요. 책장에서 골라 주세요." : "위치를 찾지 못했어요. 책장에서 골라 주세요.", "⚠️");
+          if (mode === "ask") {
+            const problem: LocationProblem = err.code === 1 ? "denied" : err.code === 3 ? "timeout" : "unavailable";
+            setLocSheet({ kind: "help", problem });
+          }
         },
-        { enableHighAccuracy: false, timeout: 10000, maximumAge: 5 * 60_000 },
+        { enableHighAccuracy: false, timeout: 12000, maximumAge: 5 * 60_000 },
       );
     },
     [branches, pickBranch, showToast],
@@ -348,12 +364,13 @@ export function App() {
     if (autoLocated.current || !branches.length || ROOM || DEMO || params.has("b")) return;
     autoLocated.current = true;
     if (!selectedRef.current) {
-      locate("ask");
+      // 처음 온 사람: 바로 권한을 묻지 않고, 안내 창에서 버튼을 눌렀을 때 묻는다
+      setLocSheet({ kind: "ask" });
       return;
     }
     navigator.permissions
       ?.query({ name: "geolocation" as PermissionName })
-      .then((st) => st.state === "granted" && locate("silent"))
+      .then((st) => st.state === "granted" && void locate("silent"))
       .catch(() => {});
   }, [branches, locate]);
 
@@ -602,7 +619,7 @@ export function App() {
                         </h2>
                       </div>
                       <div className="pick-tools">
-                      <button type="button" className="bbtn bbtn--sm bbtn--green" onClick={() => locate("ask")} disabled={locating}>
+                      <button type="button" className="bbtn bbtn--sm bbtn--green" onClick={() => void locate("ask")} disabled={locating}>
                         📍 {locating ? "위치 찾는 중…" : "내 위치로 찾기"}
                       </button>
                       <div className="seg seg--tight" role="radiogroup" aria-label="지점 고르는 방식">
@@ -868,6 +885,11 @@ export function App() {
             </div>
           )}
         </>
+      )}
+
+      {locSheet?.kind === "ask" && <LocationAsk onAllow={() => void locate("ask")} onSkip={() => setLocSheet(null)} />}
+      {locSheet?.kind === "help" && (
+        <LocationHelp problem={locSheet.problem} onRetry={() => void locate("ask")} onClose={() => setLocSheet(null)} />
       )}
 
       {/* 휴대폰: 심심풀이는 시트로 */}

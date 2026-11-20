@@ -297,3 +297,13 @@ describe("차량 모드", () => {
     for (const m of [10, 15, 20]) expect(driveMinutes(radiusForDrive(m))).toBeLessThanOrEqual(m);
   });
 });
+
+describe("위치 안내: 브라우저 구분", () => {
+  it("카카오톡 · 네이버 앱 · 사파리 · 삼성 인터넷을 구분한다", async () => {
+    const { browserEnv } = await import("../src/components/LocationSheets");
+    expect(browserEnv("Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 KAKAOTALK 10.8.5").inApp).toBe("kakao");
+    expect(browserEnv("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0) NAVER(inapp; search; 2000; 12.10.1)")).toMatchObject({ inApp: "naver", ios: true });
+    expect(browserEnv("Mozilla/5.0 (Linux; Android 14) SamsungBrowser/27.0 Chrome/125 Mobile")).toMatchObject({ inApp: null, samsung: true });
+    expect(browserEnv("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0) Version/18.0 Mobile Safari/604.1")).toMatchObject({ inApp: null, ios: true });
+  });
+});

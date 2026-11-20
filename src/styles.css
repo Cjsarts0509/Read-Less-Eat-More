@@ -4344,3 +4344,40 @@ body.modal-open {
     margin: auto;
   }
 }
+
+/* ---------- 위치 안내 ---------- */
+
+.sheet--loc {
+  width: min(480px, 100%);
+}
+
+.loc__lead {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.loc__note {
+  margin: 0;
+  font-size: 12px;
+}
+
+.loc__steps {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 8px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.loc__actions {
+  display: grid;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.loc__main {
+  min-height: 48px;
+  font-size: 15px;
+}
