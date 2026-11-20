@@ -32,3 +32,21 @@ export interface PlaceLiveResponse {
   hours: HoursInfo | null;
   checkedAt: string | null;
 }
+
+/** 사내 한줄평 하나 */
+export interface InhouseReview {
+  nickname: string;
+  rating: number;
+  comment: string;
+  updatedAt: string;
+}
+
+/** /api/reviews 응답: 가게별 사내 평점 */
+export interface ReviewSummary {
+  avg: number;
+  count: number;
+  /** 최근 한줄평 (최대 5개) */
+  recent: InhouseReview[];
+  /** 내가 쓴 평가 (me 를 보냈을 때) */
+  mine?: { rating: number; comment: string };
+}

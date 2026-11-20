@@ -2,13 +2,15 @@ import { useEffect, useRef, useState } from "react";
 import { CATEGORY_BY_KEY } from "../../shared/categories";
 import { formatHours } from "../../shared/hours";
 import { daysBetween, HOURS_STALE_DAYS } from "../../shared/insights";
-import type { MenuReport, PlaceLiveResponse } from "../../shared/api";
+import type { MenuReport, PlaceLiveResponse, ReviewSummary } from "../../shared/api";
+import { PRICE_SOURCE_LABEL } from "../../shared/price";
 import type { Place } from "../../shared/types";
 import { fetchPlaceLive } from "../lib/api";
 import { bookTitleOf } from "../lib/booktitle";
-import type { Ctx } from "../lib/filters";
+import { priceOf, type Ctx } from "../lib/filters";
 import { kakaoPlaceUrl, naverMapUrl } from "../lib/links";
-import { Badges, BlogCount, LunchLine, PlaceLinks } from "./PlaceCard";
+import { InhouseReviews } from "./InhouseReviews";
+import { Badges, BlogCount, InhouseChip, LunchLine, PlaceLinks, PriceChip } from "./PlaceCard";
 import { ClosureNotice, HoursLine, MenuReports, PlaceSignals, WebInfoBox } from "./PlaceExtras";
 
 const won = (n: number) => `${n.toLocaleString("ko-KR")}원`;
@@ -166,12 +168,15 @@ interface Props {
   menus?: MenuReport[];
   upload: { branch: string; onDone: () => void } | null;
   live: boolean;
+  /** 사내 한줄평을 쓸 수 있는가 (저장소가 켜져 있을 때) */
+  canReview: boolean;
+  onReviewSaved: (placeId: string, s: ReviewSummary | null) => void;
   onClose: () => void;
   onShowOnMap: (id: string) => void;
 }
 
 /** 가게 상세 팝업 (휴대폰에서는 아래에서 올라오는 시트) */
-export function PlaceDetail({ place: base, ctx, branch, menus, upload, live, onClose, onShowOnMap }: Props) {
+export function PlaceDetail({ place: base, ctx, branch, menus, upload, live, canReview, onReviewSaved, onClose, onShowOnMap }: Props) {
   const [found, setFound] = useState<PlaceLiveResponse | null>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   // 실시간 확인 결과를 반영한 가게 (영업시간 · 네이버 가게 번호)
@@ -223,6 +228,11 @@ export function PlaceDetail({ place: base, ctx, branch, menus, upload, live, onC
         <div className="sheet__body">
           <ClosureNotice place={place} ctx={ctx} />
           <Badges place={place} ctx={ctx} />
+          <p className="card__chips">
+            <PriceChip place={place} ctx={ctx} showUnknown />
+            <InhouseChip place={place} ctx={ctx} />
+            {priceOf(place, ctx) && <span className="muted">({PRICE_SOURCE_LABEL[priceOf(place, ctx)!.source]} 기준)</span>}
+          </p>
           {ai?.summary && <p className="card__summary">“{ai.summary}”</p>}
           {ai?.signatureMenus.length ? (
             <p className="card__menus">
@@ -263,6 +273,16 @@ export function PlaceDetail({ place: base, ctx, branch, menus, upload, live, onC
 
           {live && !place.id.startsWith("demo-") && <LiveCheck place={base} branch={branch} ctx={ctx} onFound={setFound} />}
           {!found && <WebInfoBox place={place} />}
+
+          {(canReview || ctx.reviews?.[place.id]) && (
+            <InhouseReviews
+              branch={branch}
+              placeId={place.id}
+              summary={ctx.reviews?.[place.id]}
+              canWrite={canReview && !place.id.startsWith("demo-")}
+              onSaved={(s) => onReviewSaved(place.id, s)}
+            />
+          )}
 
           <MenuReports
             place={place}

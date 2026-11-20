@@ -217,3 +217,65 @@ describe("블로그 낱말로 찾는 새 소식", () => {
     expect(placeBadges({ ai, autoBadges: auto }, today).map((b) => b.label)).toEqual(["리뷰 이벤트", "신메뉴"]);
   });
 });
+
+describe("점심 1인 가격 어림", () => {
+  it("가격대 문구를 숫자로", async () => {
+    const { parsePriceHint } = await import("../shared/price");
+    expect(parsePriceHint("9천원대")).toBe(9500);
+    expect(parsePriceHint("1만~1.5만원")).toBe(12500);
+    expect(parsePriceHint("8,000원")).toBe(8000);
+    expect(parsePriceHint("1만원대")).toBe(12000);
+    expect(parsePriceHint("가성비 좋음")).toBeNull();
+  });
+
+  it("메뉴 가격 기록 → 메뉴판 사진 → 가격대 → 웹 조사 순", async () => {
+    const { lunchPrice } = await import("../shared/price");
+    const today = "2026-11-20";
+    const base = { ai: { priceHint: "9천원대" } as Place["ai"], web: null };
+    expect(
+      lunchPrice(
+        {
+          ...base,
+          priceHistory: [
+            { item: "순대국", price: 10000, date: "2026-11-01", source: "blog" },
+            { item: "수육", price: 30000, date: "2026-11-01", source: "blog" },
+            { item: "순대국", price: 9000, date: "2026-01-01", source: "blog" },
+            { item: "공깃밥", price: 1000, date: "2026-11-01", source: "blog" },
+          ],
+        },
+        undefined,
+        today,
+      ),
+    ).toEqual({ price: 10000, source: "menu" });
+    expect(lunchPrice({ ...base, priceHistory: [] }, [{ items: [{ price: 8000 }, { price: 9000 }, { price: null }] }], today)).toEqual({
+      price: 8000,
+      source: "photo",
+    });
+    expect(lunchPrice({ ...base, priceHistory: [] }, undefined, today)).toEqual({ price: 9500, source: "hint" });
+    expect(lunchPrice({ ai: null, web: null, priceHistory: [] }, undefined, today)).toBeNull();
+  });
+
+  it("예산 필터는 가격을 아는 곳 중 넘는 곳만 뺀다", async () => {
+    const { applyFilters, DEFAULT_FILTERS } = await import("../src/lib/filters");
+    const mk = (id: string, hint: string | null) =>
+      ({ id, name: id, walkMin: 3, lunch: "open", category: "korean", categoryPath: "", ai: hint ? { priceHint: hint, badges: [] } : null, naver: null }) as unknown as Place;
+    const out = applyFilters([mk("싼곳", "8천원대"), mk("비싼곳", "2만원"), mk("모름", null)], { ...DEFAULT_FILTERS, walk: 0, budget: 10000 }, {
+      today: "2026-11-20",
+      baselineDate: null,
+    });
+    expect(out.map((p) => p.id)).toEqual(["싼곳", "모름"]);
+  });
+});
+
+describe("가장 가까운 지점", () => {
+  it("직선거리로 고른다", async () => {
+    const { nearestBranch } = await import("../shared/geo");
+    const branches = [
+      { code: "001", lat: 37.571, lng: 126.9778 },
+      { code: "HO1", lat: 37.5813, lng: 126.8886 },
+    ];
+    const near = nearestBranch(branches, { lat: 37.5799, lng: 126.8899 });
+    expect(near?.branch.code).toBe("HO1");
+    expect(near!.distance).toBeLessThan(300);
+  });
+});

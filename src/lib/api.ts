@@ -1,8 +1,8 @@
 /** Worker API 호출 모음 */
-import type { MenuReport, PlaceLiveResponse, WeatherResponse } from "../../shared/api";
+import type { MenuReport, PlaceLiveResponse, ReviewSummary, WeatherResponse } from "../../shared/api";
 import { readStore, writeStore } from "./storage";
 
-export type { MenuReport, PlaceLiveResponse, WeatherResponse };
+export type { MenuReport, PlaceLiveResponse, ReviewSummary, WeatherResponse };
 
 async function call<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
@@ -82,6 +82,16 @@ export const joinRoom = (code: string, nickname: string, prefs: RoomPrefs) =>
 export const voteRoom = (code: string, placeId: string | null) => post<RoomView>(`/api/rooms/${code}/vote`, { memberKey: memberKey(), placeId });
 export const mediateRoom = (code: string) => post<RoomView>(`/api/rooms/${code}/mediate`, { memberKey: memberKey() });
 export const decideRoom = (code: string) => post<RoomView>(`/api/rooms/${code}/decide`, { memberKey: memberKey() });
+
+/* ---------- 사내 한줄평 ---------- */
+
+export function fetchReviews(branch: string): Promise<Record<string, ReviewSummary>> {
+  return call<Record<string, ReviewSummary>>(`/api/reviews?b=${encodeURIComponent(branch)}&me=${memberKey()}`).catch(() => ({}));
+}
+
+export function postReview(body: { branch: string; placeId: string; nickname: string; rating: number; comment: string }) {
+  return post<ReviewSummary | null>("/api/reviews", { ...body, memberKey: memberKey() });
+}
 
 /* ---------- 메뉴판 사진 ---------- */
 

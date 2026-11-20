@@ -10,6 +10,13 @@ const BUDGETS = [
   { v: 90, label: "1시간 반" },
 ];
 
+const BUDGET_WON = [
+  { v: 0, label: "전체" },
+  { v: 10000, label: "1만원" },
+  { v: 12000, label: "1.2만원" },
+  { v: 15000, label: "1.5만원" },
+];
+
 const WALKS = [
   { v: 5, label: "5분" },
   { v: 10, label: "10분" },
@@ -71,6 +78,12 @@ export function FilterBar({ filters, onChange }: Props) {
           ⏱ 점심시간
         </span>
         <Segmented label="점심시간 한도 (왕복 + 식사 + 웨이팅)" value={filters.timeBudget} options={BUDGETS} onPick={(v) => set("timeBudget", v)} />
+      </div>
+      <div className="frow">
+        <span className="frow__label" title="가격을 아는 가게 중 이 금액을 넘는 곳은 뺍니다">
+          💳 1인 예산
+        </span>
+        <Segmented label="1인 예산 (식대 한도)" value={filters.budget} options={BUDGET_WON} onPick={(v) => set("budget", v)} />
       </div>
       <div className="frow frow--split">
         <label className="switch">

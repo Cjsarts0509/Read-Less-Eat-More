@@ -8,11 +8,13 @@
  *  - /api/menu-photo   메뉴판 사진 → 메뉴 · 가격 (Claude 비전 + Supabase)
  *  - /api/menus        지점별 제보된 메뉴판
  *  - /api/place-live   상세 화면 실시간 확인 (영업시간 · 메뉴, AI 웹 검색 + Supabase 캐시)
+ *  - /api/reviews      사내 한줄평 · 별점
  */
 import Anthropic from "@anthropic-ai/sdk";
 import { handleChat } from "./chat";
 import { HttpError, json, todayKst, type Env } from "./env";
 import { handlePlaceLive } from "./live";
+import { handleReviews } from "./reviews";
 import { handleMenuPhoto, handleMenus } from "./menus";
 import { handleRooms } from "./rooms";
 import { hasSupabase } from "./supabase";
@@ -46,6 +48,8 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
       return handleMenus(request, env);
     case "place-live":
       return handlePlaceLive(request, env);
+    case "reviews":
+      return handleReviews(request, env);
     default:
       throw new HttpError(404, "not found");
   }

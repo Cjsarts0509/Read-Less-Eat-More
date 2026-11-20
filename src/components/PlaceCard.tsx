@@ -2,7 +2,8 @@ import { CATEGORY_BY_KEY } from "../../shared/categories";
 import { BADGE_META, closureOf, CLOSURE_LABEL, isNewlyListed, LUNCH_LABEL } from "../../shared/insights";
 import { estimateLunchTime } from "../../shared/time";
 import type { Place } from "../../shared/types";
-import { badgesOf, type Ctx } from "../lib/filters";
+import { PRICE_SOURCE_LABEL } from "../../shared/price";
+import { badgesOf, priceOf, type Ctx } from "../lib/filters";
 import { directionsUrl, kakaoPlaceUrl, naverMapUrl } from "../lib/links";
 
 const fmt = new Intl.NumberFormat("ko-KR");
@@ -72,6 +73,29 @@ export function PlaceLinks({ place, onShowOnMap }: { place: Place; onShowOnMap?:
   );
 }
 
+/** 1인 가격 어림 + 예산(식대 한도) 안인지 */
+export function PriceChip({ place, ctx, showUnknown = false }: { place: Place; ctx: Ctx; showUnknown?: boolean }) {
+  const p = priceOf(place, ctx);
+  if (!p) return showUnknown ? <span className="pchip pchip--unknown">💳 가격 미확인</span> : null;
+  const over = ctx.budget ? p.price - ctx.budget : 0;
+  return (
+    <span className={`pchip${over > 0 ? " pchip--over" : ctx.budget ? " pchip--ok" : ""}`} title={PRICE_SOURCE_LABEL[p.source]}>
+      💳 약 {fmt.format(p.price)}원{over > 0 ? ` · 한도 +${fmt.format(over)}` : ctx.budget ? " · 한도 안" : ""}
+    </span>
+  );
+}
+
+/** 사내 평점 */
+export function InhouseChip({ place, ctx }: { place: Place; ctx: Ctx }) {
+  const r = ctx.reviews?.[place.id];
+  if (!r?.count) return null;
+  return (
+    <span className="ichip" title="우리 직원들이 남긴 별점">
+      🏢 사내 ★{r.avg.toFixed(1)} <span className="muted">({r.count})</span>
+    </span>
+  );
+}
+
 /** 블로그 리뷰 수 */
 export function BlogCount({ place }: { place: Place }) {
   const n = place.naver;
@@ -127,6 +151,10 @@ export function PlaceCard({ place, ctx, highlighted, onOpen }: Props) {
 
       <h3 className="card__name">{place.name}</h3>
       <Badges place={place} ctx={ctx} withClosure />
+      <p className="card__chips">
+        <PriceChip place={place} ctx={ctx} />
+        <InhouseChip place={place} ctx={ctx} />
+      </p>
 
       <p className="card__meta">
         <BlogCount place={place} />

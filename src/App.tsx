@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CATEGORY_BY_KEY } from "../shared/categories";
 import type { Branch, BranchPlaces, CategoryKey, DataIndex } from "../shared/types";
-import type { MenuReport, WeatherResponse } from "../shared/api";
+import type { MenuReport, ReviewSummary, WeatherResponse } from "../shared/api";
+import { nearestBranch } from "../shared/geo";
 import { BookShelf } from "./components/BookShelf";
 import { BranchMap } from "./components/BranchMap";
 import { CategoryTabs, FilterBar } from "./components/FilterBar";
@@ -11,9 +12,19 @@ import { LibrarianChat } from "./components/LibrarianChat";
 import { PublishStage } from "./components/PublishStage";
 import { RoomPage } from "./components/RoomPage";
 import { WeatherBand } from "./components/WeatherBand";
-import { createRoom, fetchMenus, fetchWeather } from "./lib/api";
+import { createRoom, fetchMenus, fetchReviews, fetchWeather } from "./lib/api";
 import { loadBranches, loadConfig, loadIndex, loadPlaces, todayKst, type AppConfig } from "./lib/data";
-import { applyFilters, countByCategory, DEFAULT_FILTERS, SORT_LABEL, sortPlaces, type Ctx, type Filters, type SortKey } from "./lib/filters";
+import {
+  applyFilters,
+  countByCategory,
+  DEFAULT_FILTERS,
+  inhouseTop,
+  SORT_LABEL,
+  sortPlaces,
+  type Ctx,
+  type Filters,
+  type SortKey,
+} from "./lib/filters";
 import { sfx } from "./lib/sfx";
 import { readStore, writeStore } from "./lib/storage";
 
@@ -101,6 +112,8 @@ export function App() {
   const [weather, setWeather] = useState<WeatherResponse | null>(null);
   const [weatherOn, setWeatherOn] = useState<boolean>(() => readStore("lmp:weatherOn", true));
   const [menus, setMenus] = useState<Record<string, MenuReport[]>>({});
+  const [reviews, setReviews] = useState<Record<string, ReviewSummary>>({});
+  const [locating, setLocating] = useState(false);
   const [selectedCode, setSelectedCode] = useState<string | null>(() => params.get("b") ?? readStore<string | null>("rlem:branch", null));
   const [pickView, setPickView] = useState<PickView>(() => readStore<PickView>("rlem:pickView", "shelf"));
   const [places, setPlaces] = useState<PlacesState>({ status: "idle" });
@@ -151,6 +164,7 @@ export function App() {
   useEffect(() => {
     setWeather(null);
     setMenus({});
+    setReviews({});
     if (!selected) return;
     if (DEMO) {
       setWeather(DEMO_WEATHER);
@@ -164,12 +178,15 @@ export function App() {
   }, [selected]);
 
   const refreshMenus = useCallback(() => {
-    if (selected && config.store && !DEMO) void fetchMenus(selected.code).then(setMenus);
+    if (selected && config.store && !DEMO) {
+      void fetchMenus(selected.code).then(setMenus);
+      void fetchReviews(selected.code).then(setReviews);
+    }
   }, [selected, config.store]);
   useEffect(refreshMenus, [refreshMenus]);
   useEffect(() => {
     const { walk, lunchOnly, sort } = filters;
-    writeStore("rlem:filters", { walk, lunchOnly, sort });
+    writeStore("rlem:filters", { walk, lunchOnly, sort, budget: filters.budget });
     setVisible(PAGE);
   }, [filters]);
 
@@ -198,7 +215,10 @@ export function App() {
 
   const showToast = useCallback((msg: string, icon = "✅") => setToast((t) => ({ msg, icon, n: (t?.n ?? 0) + 1 })), []);
 
-  const ctx: Ctx = useMemo(() => ({ today, baselineDate: DEMO ? null : (index?.baselineDate ?? null) }), [today, index]);
+  const ctx: Ctx = useMemo(
+    () => ({ today, baselineDate: DEMO ? null : (index?.baselineDate ?? null), reviews, menus, budget: filters.budget }),
+    [today, index, reviews, menus, filters.budget],
+  );
   // 배달 · 포장 전문점은 목록 · 지도 · 뽑기에서 뺀다
   const all = useMemo(() => (places.status === "ready" ? places.data.places.filter((p) => !p.deliveryOnly) : []), [places]);
   const hiddenDelivery = places.status === "ready" ? places.data.places.length - all.length : 0;
@@ -216,9 +236,12 @@ export function App() {
 
   // 지점 목록을 불러오기 전에도 주소 · 저장값으로 고른 지점이 있으면 넘길 수 있게
   const maxStep = selectedCode ? 4 : 1;
+  // 지점을 고른 직후(같은 틱)에 넘겨도 최신 한도를 보도록 ref 로 읽는다
+  const maxStepRef = useRef(maxStep);
+  maxStepRef.current = maxStep;
   const go = useCallback(
     (n: number) => {
-      const next = Math.max(1, Math.min(n, maxStep));
+      const next = Math.max(1, Math.min(n, maxStepRef.current));
       setStep((cur) => {
         if (next === cur) return cur;
         setDir(next > cur ? "next" : "prev");
@@ -231,7 +254,7 @@ export function App() {
         if (top < 0 || top > window.innerHeight * 0.5) window.scrollTo({ top: Math.max(0, window.scrollY + top - 8), behavior: "smooth" });
       });
     },
-    [maxStep],
+    [],
   );
   useEffect(() => writeStore("lmp:onehand", oneHand), [oneHand]);
   useEffect(() => {
@@ -246,6 +269,65 @@ export function App() {
     },
     [go],
   );
+  /**
+   * 위치로 가장 가까운 지점 찾기.
+   * ask: 위치 권한을 묻고 가장 가까운 지점을 열어 다음 장으로 · silent: 이미 허용된 경우에만, 1.5km 안의 다른 지점이면 바꾼다
+   */
+  const selectedRef = useRef(selectedCode);
+  useEffect(() => {
+    selectedRef.current = selectedCode;
+  }, [selectedCode]);
+  const locate = useCallback(
+    (mode: "ask" | "silent") => {
+      if (!("geolocation" in navigator) || !branches.length) {
+        if (mode === "ask") showToast("이 브라우저는 위치를 알려 주지 않아요. 책장에서 골라 주세요.", "⚠️");
+        return;
+      }
+      setLocating(true);
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setLocating(false);
+          const near = nearestBranch(branches, { lat: pos.coords.latitude, lng: pos.coords.longitude });
+          if (!near) return;
+          const dist = near.distance >= 1000 ? `${(near.distance / 1000).toFixed(1)}km` : `${near.distance}m`;
+          if (mode === "silent") {
+            if (near.distance <= 1500 && near.branch.code !== selectedRef.current) {
+              setSelectedCode(near.branch.code);
+              showToast(`지금 계신 곳에서 가까운 ${near.branch.label} 서가를 열었어요 (${dist})`, "📍");
+            }
+            return;
+          }
+          if (near.distance > 30000) {
+            showToast(`근처에 지점이 없어요 · 가장 가까운 곳은 ${near.branch.label} (${dist})`, "📍");
+            return;
+          }
+          showToast(`가장 가까운 ${near.branch.label} 서가를 열었어요 (${dist})`, "📍");
+          pickBranch(near.branch.code);
+        },
+        (err) => {
+          setLocating(false);
+          if (mode === "ask") showToast(err.code === 1 ? "위치 권한이 꺼져 있어요. 책장에서 골라 주세요." : "위치를 찾지 못했어요. 책장에서 골라 주세요.", "⚠️");
+        },
+        { enableHighAccuracy: false, timeout: 10000, maximumAge: 5 * 60_000 },
+      );
+    },
+    [branches, pickBranch, showToast],
+  );
+  // 처음 온 사람은 위치로 바로 가까운 지점을, 위치를 이미 허용한 사람은 다른 지점 근처에 있을 때만 바꿔 준다
+  const autoLocated = useRef(false);
+  useEffect(() => {
+    if (autoLocated.current || !branches.length || ROOM || DEMO || params.has("b")) return;
+    autoLocated.current = true;
+    if (!selectedRef.current) {
+      locate("ask");
+      return;
+    }
+    navigator.permissions
+      ?.query({ name: "geolocation" as PermissionName })
+      .then((st) => st.state === "granted" && locate("silent"))
+      .catch(() => {});
+  }, [branches, locate]);
+
   /** 서가 지도에서 다른 지점 핀을 누르면 지점만 바꾼다 */
   const selectBranch = useCallback((code: string | null) => setSelectedCode(code), []);
 
@@ -288,6 +370,7 @@ export function App() {
 
   const tabLabel = tab === "all" ? "전체" : CATEGORY_BY_KEY[tab].label;
   const detailPlace = detailId ? (all.find((p) => p.id === detailId) ?? null) : null;
+  const bestsellers = inhouseTop(all, ctx);
   const poolDesc = `${filters.walk ? `도보 ${filters.walk}분` : "반경 전체"} · ${tabLabel}${filters.lunchOnly ? " · 점심 영업" : ""}`;
   const branchInfo = selected ? index?.branches[selected.code] : undefined;
   const sorts = (Object.keys(SORT_LABEL) as SortKey[]).filter((s) => s !== "rating" || hasRating);
@@ -459,6 +542,10 @@ export function App() {
                           전국 지점 책장 <small>지점 선택</small>
                         </h2>
                       </div>
+                      <div className="pick-tools">
+                      <button type="button" className="bbtn bbtn--sm bbtn--green" onClick={() => locate("ask")} disabled={locating}>
+                        📍 {locating ? "위치 찾는 중…" : "내 위치로 찾기"}
+                      </button>
                       <div className="seg seg--tight" role="radiogroup" aria-label="지점 고르는 방식">
                         {(["shelf", "map"] as const).map((v) => (
                           <button
@@ -472,6 +559,7 @@ export function App() {
                             {v === "shelf" ? "📚 책장" : "🗺️ 지도"}
                           </button>
                         ))}
+                      </div>
                       </div>
                     </div>
                     <p className="hint">
@@ -604,6 +692,16 @@ export function App() {
                           조건 바꾸기
                         </button>
                       </p>
+                      {bestsellers.length > 0 && (
+                        <div className="bestsellers no-swipe" aria-label="사내 베스트셀러">
+                          <span className="bestsellers__label">🏆 사내 베스트셀러</span>
+                          {bestsellers.map((p, i) => (
+                            <button type="button" key={p.id} className="bestsellers__item" onClick={() => showCard(p.id)}>
+                              <b>{i + 1}</b> {p.name} <span>★{reviews[p.id]!.avg.toFixed(1)}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
                       <div className="shelf-area">
                         {(wide || shelfView === "map") && (
                           <div ref={areaMapRef} className="shelf-area__map">
@@ -720,6 +818,8 @@ export function App() {
           menus={menus[detailPlace.id]}
           upload={upload}
           live={config.ai && config.store && !DEMO}
+          canReview={config.store && !DEMO}
+          onReviewSaved={(id, s) => setReviews((r) => (s ? { ...r, [id]: s } : r))}
           onClose={closeDetail}
           onShowOnMap={showOnMap}
         />

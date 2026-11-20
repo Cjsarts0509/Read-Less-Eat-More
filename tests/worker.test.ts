@@ -141,3 +141,19 @@ describe("상세 화면 실시간 확인", () => {
     expect(called).toBe(0);
   });
 });
+
+describe("사내 한줄평", () => {
+  it("평균 · 개수 · 최근 글 · 내 평가를 묶고, 다른 사람의 멤버 키는 내보내지 않는다", async () => {
+    const { summarize, cleanComment } = await import("../worker/reviews");
+    const rows = [
+      { place_id: "1", member_key: "me-12345678", nickname: "나", rating: 5, comment: "진함", updated_at: "2026-11-20T03:00:00Z" },
+      { place_id: "1", member_key: "you-1234567", nickname: "너", rating: 4, comment: "", updated_at: "2026-11-19T03:00:00Z" },
+      { place_id: "2", member_key: "you-1234567", nickname: "너", rating: 2, comment: "짬", updated_at: "2026-11-18T03:00:00Z" },
+    ];
+    const s = summarize(rows, "me-12345678");
+    expect(s["1"]).toMatchObject({ avg: 4.5, count: 2, mine: { rating: 5, comment: "진함" } });
+    expect(s["2"]!.mine).toBeUndefined();
+    expect(JSON.stringify(s)).not.toContain("you-1234567");
+    expect(cleanComment("  맛있어요\n https://spam.example  최고 ")).toBe("맛있어요 최고");
+  });
+});

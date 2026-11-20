@@ -66,3 +66,13 @@ export function rectIntersectsCircle(r: Rect, center: LatLng, radiusM: number): 
   };
   return haversine(center, nearest) <= radiusM;
 }
+
+/** 가장 가까운 지점 (거리 m 포함) */
+export function nearestBranch<B extends { lat: number; lng: number }>(branches: B[], at: { lat: number; lng: number }): { branch: B; distance: number } | null {
+  let best: { branch: B; distance: number } | null = null;
+  for (const b of branches) {
+    const d = haversine(at, b);
+    if (!best || d < best.distance) best = { branch: b, distance: Math.round(d) };
+  }
+  return best;
+}
