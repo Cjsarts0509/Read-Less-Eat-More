@@ -192,7 +192,7 @@ npm run import:branches -- ~/Downloads/BookGrid_지점주소.xlsx
 
 ## 운영 점검 (n8n)
 
-n8n 워크플로 「점심은 사람을 만든다 · 운영 점검」(n8n.cjs0509.xyz)이 맡습니다. 수집 자체는 GitHub Actions 그대로입니다.
+n8n 워크플로 「점심은 사람을 만든다 · 운영 점검」이 맡습니다. 수집 자체는 GitHub Actions 그대로입니다.
 
 - **평일 10:40**: GitHub 수집 기록 · 사이트 `/api/config` · `data/index.json` 날짜를 확인합니다. 문제가 있으면 SMTP 로 메일을 보내고, 오늘 수집이 안 돌았거나 실패했으면 하루 한 번 `collect.yml` 을 다시 실행합니다.
 - **매일 03:30**: Supabase 에서 14일 지난 투표방과 60일 지난 실시간 확인 캐시를 지웁니다.
