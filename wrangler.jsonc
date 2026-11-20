@@ -1,7 +1,7 @@
 {
   // Cloudflare Workers 설정 — https://developers.cloudflare.com/workers/wrangler/configuration/
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "read-less-eat-more",
+  "name": "lunch-makes-the-person",
   "main": "worker/index.ts",
   "compatibility_date": "2026-11-01",
   "compatibility_flags": ["nodejs_compat"],

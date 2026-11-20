@@ -351,7 +351,7 @@ export function PublishStage({ branch, pool, allPlaces, ctx, poolDesc, onShowOnM
         <span className="corner corner--tl">┌ KDC-EDITION</span>
         <span className="corner corner--tr">HARDCOVER ┐</span>
         <span className="corner corner--bl">└ NO-STARVATION</span>
-        <span className="corner corner--br">READ-LESS ┘</span>
+        <span className="corner corner--br">KYOBO-EAT ┘</span>
 
         <div ref={book} className="book">
           <div className="book__crease" aria-hidden />
@@ -370,7 +370,7 @@ export function PublishStage({ branch, pool, allPlaces, ctx, poolDesc, onShowOnM
 
           {stamp > 0 && (
             <div key={`stamp-${stamp}`} className="stamp" role="img" aria-label="변심 반품·교환 불가">
-              <div className="stamp__law">읽먹문고 규정 제1조</div>
+              <div className="stamp__law">교보식도락 규정 제1조</div>
               <div className="stamp__main">변심 반품·교환 불가</div>
               <div className="stamp__sub">3회 이상 재추첨 적발</div>
             </div>
@@ -379,7 +379,7 @@ export function PublishStage({ branch, pool, allPlaces, ctx, poolDesc, onShowOnM
           {!result ? (
             <div className="cover">
               <div className="cover__top">
-                <span className="cover__press">READ LESS PRESS</span>
+                <span className="cover__press">LUNCH MAKES PRESS</span>
                 <span className="cover__pill">{branch.label}</span>
               </div>
               <div className="cover__mid">
@@ -466,7 +466,7 @@ export function PublishStage({ branch, pool, allPlaces, ctx, poolDesc, onShowOnM
                   📋 사내 메신저 점심 초대 문구 복사
                 </button>
                 <div className="colophon">
-                  <span>출판: 읽지 않고 먹습니다 식도락문고</span>
+                  <span>출판: 점심은 사람을 만든다 식도락문고</span>
                   <span className="colophon__code">
                     <span className="barcode" aria-hidden />
                     <span className="mono">{isbnOf(branch.code, result)}</span>

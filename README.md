@@ -1,4 +1,4 @@
-# 읽지 않고 먹습니다 · Read Less, Eat More
+# 점심은 사람을 만든다 · Lunch Makes the Person
 
 지점 주변에서 **걸어서 갈 만한 점심 식당**을 모아 보여 주고, 고르기 어려우면 **오늘 갈 곳을 뽑아 주는** 사이트입니다.
 
@@ -87,7 +87,7 @@
    - Account Resources: 내 계정 / Zone Resources: 연결할 도메인(있다면)
 2. 대시보드 Workers 화면 오른쪽의 **Account ID** 를 복사
 3. 두 값을 GitHub Secrets 에 `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` 로 저장
-4. `main` 브랜치에 push 하면 `Deploy` 워크플로가 `https://read-less-eat-more.<계정>.workers.dev` 로 배포
+4. `main` 브랜치에 push 하면 `Deploy` 워크플로가 `https://lunch-makes-the-person.<계정>.workers.dev` 로 배포
 5. **Actions → 식당 데이터 수집 → Run workflow** 로 첫 수집 (처음엔 `ai_budget` 을 크게 잡으면 빨리 채워짐)
 
 #### 내 도메인 연결 (cjslabs.kr)

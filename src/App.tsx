@@ -21,7 +21,7 @@ const DEMO = params.has("demo");
 
 const TICKER = [
   "📚 사람은 책을 만들고, 점심은 사람을 만든다",
-  "읽지 않고 먹습니다 · READ LESS, EAT MORE",
+  "점심은 사람을 만든다 · LUNCH MAKES THE PERSON",
   "완독보다 완뚝! 절판은 있어도 절식은 없다",
   "주의: 3회 이상 재추첨 시 변심 반품 불가 도장이 날인됩니다",
   "신규 오픈 · 이벤트 · 시즌 메뉴는 AI 사서가 매일 아침 입고",
@@ -178,7 +178,7 @@ export function App() {
                 전국 식도락 출판사 · KDC-LUNCH
               </span>
               <button type="button" className="sticker" onClick={() => showToast("사람은 책을 만들고, 점심은 사람을 만든다!", "🏷️")}>
-                🏷️ 읽먹 에디션
+                🏷️ 교보먹고 에디션
               </button>
             </div>
             <button
@@ -197,9 +197,9 @@ export function App() {
 
           <div className="hero__main">
             <div>
-              <p className="kicker">READ LESS, EAT MORE — 전국 지점 점심 큐레이션</p>
+              <p className="kicker">LUNCH MAKES THE PERSON — 전국 지점 점심 큐레이션</p>
               <h1 className="hero__title">
-                읽지 않고 <mark>먹습니다</mark>
+                점심은 <mark>사람을</mark> 만든다
               </h1>
               <p className="hero__lead">
                 “사람은 책을 만들고, 점심은 사람을 만든다.” 오늘 근무하는 지점의 책등을 뽑아 12시의 필독 메뉴를 편찬하세요.
@@ -389,7 +389,7 @@ export function App() {
         )}
 
         <footer className="footer">
-          <p className="footer__motto">사람은 책을 만들고, 점심은 사람을 만든다 · 읽지 않고 먹습니다</p>
+          <p className="footer__motto">점심은 사람을 만든다 · Lunch Makes the Person</p>
           <p>
             식당 목록 <b>카카오 로컬</b> · 블로그 리뷰 <b>네이버 검색</b> · 책 제목·사서평·새 소식 <b>Claude</b>
             {all.some((p) => p.google) && (

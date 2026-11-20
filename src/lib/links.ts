@@ -24,7 +24,7 @@ export function directionsUrl(place: Pick<Place, "name" | "lat" | "lng">): strin
 export function shareText(place: Place, branch: Branch, bookTitle: string): string {
   const menus = place.ai?.signatureMenus.length ? ` (${place.ai.signatureMenus.join(" · ")})` : "";
   const lines = [
-    `📚 [읽지 않고 먹습니다 - ${branch.label} 편찬실]`,
+    `📚 [점심은 사람을 만든다 - ${branch.label} 편찬실]`,
     `오늘의 필독서: 《${bookTitle}》`,
     `🍽️ 식당: ${place.name}${menus}`,
     `🚶 도보 ${place.walkMin}분${place.ai?.priceHint ? ` · ${place.ai.priceHint}` : ""}`,

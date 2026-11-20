@@ -1,9 +1,9 @@
 {
-  "name": "read-less-eat-more",
+  "name": "lunch-makes-the-person",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "읽지 않고 먹습니다 (Read Less, Eat More) — 지점 주변 점심 맛집 & 랜덤 뽑기",
+  "description": "점심은 사람을 만든다 (Lunch Makes the Person) — 지점 주변 점심 맛집 & 오늘의 한 끼 편찬",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
