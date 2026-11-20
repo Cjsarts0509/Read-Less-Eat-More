@@ -1,6 +1,7 @@
 /**
- * 웹 검색 보강 — 블로그 글이 거의 없는 새 가게를 Claude 웹 검색 도구로 찾아본다.
- * (개업 시기 · 영업시간 · 폐업/이전 · 대표 메뉴)
+ * AI 웹 조사 — Claude 웹 검색 도구로 가게 정보를 확인한다.
+ * (영업시간 · 브레이크 · 휴무 · 매장 식사 여부 · 대표 메뉴와 가격 · 좌석 · 네이버 지도 가게 번호 · 개업 시기 · 폐업/이전)
+ * 다이닝코드 · 네이버 플레이스 · 카카오맵 · 식신 같은 맛집 정보 페이지를 우선 참고한다.
  *
  * 웹 검색 결과에는 인용이 붙어 구조화 출력과 함께 쓰기 어려워, 마지막에 JSON 코드 블록으로
  * 답하게 하고 zod 로 검증한다. 인용된 주소는 출처로 남긴다.
@@ -15,10 +16,30 @@ const FindingSchema = z.object({
   summary: z.string().nullable().optional(),
   openedOn: z.string().nullable().optional(),
   hours: z.string().nullable().optional(),
+  breakTime: z.string().nullable().optional().catch(null),
+  lastOrder: z.string().nullable().optional().catch(null),
+  closedDays: z.string().nullable().optional().catch(null),
   lunch: z.enum(["yes", "no", "unknown"]).catch("unknown"),
   closure: z.enum(["open", "closed", "moved", "temporarily_closed", "unknown"]).catch("unknown"),
+  dineIn: z.enum(["yes", "no", "unknown"]).catch("unknown"),
   menus: z.array(z.string()).catch([]),
+  menuPrice: z
+    .object({ item: z.string(), price: z.coerce.number() })
+    .nullable()
+    .optional()
+    .catch(null),
+  seats: z.string().nullable().optional().catch(null),
+  naverPlaceUrl: z.string().nullable().optional().catch(null),
 });
+
+/** 네이버 지도 가게 주소에서 가게 번호를 뽑는다 */
+export function naverPlaceIdFrom(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const m = url.match(
+    /(?:m\.place\.naver\.com|pcmap\.place\.naver\.com|place\.naver\.com)\/(?:restaurant|place|cafe|food)\/(\d{5,})|map\.naver\.com\/(?:p|v5)\/(?:entry\/place|search\/[^/?#]+\/place|place)\/(\d{5,})|naver\.me\/.*[?&]id=(\d{5,})/,
+  );
+  return m ? (m[1] ?? m[2] ?? m[3] ?? null) : null;
+}
 
 const clip = (s: string | null | undefined, n: number) => {
   if (!s) return null;
@@ -47,36 +68,81 @@ export function extractJson(text: string): unknown {
   return null;
 }
 
-export function toWebInfo(raw: unknown, sources: WebInfo["sources"], today: string): WebInfo | null {
+export function toWebInfo(
+  raw: unknown,
+  sources: WebInfo["sources"],
+  today: string,
+  opts: { resultUrls?: Array<{ title: string; url: string }>; core?: string } = {},
+): WebInfo | null {
   const parsed = FindingSchema.safeParse(raw);
   if (!parsed.success || !parsed.data.found) return null;
   const d = parsed.data;
+  // 네이버 가게 번호: 모델이 고른 주소 → 검색 결과 중 제목에 가게 이름이 들어간 네이버 지도 주소
+  const squash = (x: string) => x.replace(/\s+/g, "").toLowerCase();
+  let naverPlaceId = naverPlaceIdFrom(d.naverPlaceUrl);
+  if (!naverPlaceId && opts.core) {
+    const hit = (opts.resultUrls ?? []).find((r) => naverPlaceIdFrom(r.url) && squash(r.title).includes(squash(opts.core!)));
+    naverPlaceId = hit ? naverPlaceIdFrom(hit.url) : null;
+  }
+  const price = d.menuPrice && d.menuPrice.item.trim() && d.menuPrice.price >= 1000 && d.menuPrice.price <= 200000 ? d.menuPrice : null;
   return {
     summary: clip(d.summary, 60),
     openedOn: d.openedOn && /^\d{4}-\d{2}(-\d{2})?$/.test(d.openedOn) ? d.openedOn : null,
     hours: clip(d.hours, 40),
+    breakTime: clip(d.breakTime, 30),
+    lastOrder: clip(d.lastOrder, 20),
+    closedDays: clip(d.closedDays, 30),
     lunch: d.lunch,
     closure: d.closure,
+    dineIn: d.dineIn,
     menus: d.menus.map((m) => clip(m, 20)!).filter(Boolean).slice(0, 3),
+    menuPrice: price ? { item: clip(price.item, 20)!, price: Math.round(price.price) } : null,
+    seats: clip(d.seats, 50),
+    naverPlaceId,
     sources: sources.slice(0, 3),
     checkedAt: today,
   };
 }
 
-const PROMPT = (p: Place, today: string) => `오늘은 ${today} 입니다. 아래 식당의 최근 정보를 웹에서 찾아 주세요.
+const PROMPT = (p: Place, today: string) => `오늘은 ${today} 입니다. 직장인 점심 추천에 쓸 수 있게 아래 식당의 정보를 웹에서 확인해 주세요.
 
 이름: ${p.name}
 주소: ${p.address}
 분류: ${p.categoryPath}
 
-찾을 것: 개업 시기, 영업시간(평일 점심 포함 여부), 폐업 · 이전 · 휴업 여부, 대표 메뉴, 한 줄 소개.
-주소가 다른 같은 이름의 가게와 헷갈리지 마세요. 찾지 못한 항목은 null 로 두고 지어내지 마세요.
+찾을 것
+- 평일 영업시간 · 브레이크타임 · 라스트오더 · 정기 휴무일
+- 매장에서 먹을 수 있는지 (배달 · 포장 전문점이면 "no")
+- 대표 메뉴와 그 1인분 가격, 좌석 · 단체석 안내
+- 네이버 지도 가게 주소 (m.place.naver.com/restaurant/숫자 또는 map.naver.com/p/entry/place/숫자 형태)
+- 폐업 · 이전 · 휴업 여부, 개업 시기, 한 줄 소개
+
+방법: 「가게 이름 + 동네」로 검색하고, 다이닝코드 · 네이버 플레이스 · 카카오맵 · 식신 · 캐치테이블 같은 맛집 정보 페이지와 최근 방문 후기를 우선 참고하세요.
+주소가 다른 같은 이름의 가게(다른 지점)와 헷갈리지 마세요. 확인하지 못한 항목은 null 로 두고 지어내지 마세요.
 
 마지막에 아래 형식의 JSON 코드 블록 하나로만 답하세요.
 \`\`\`json
-{"found": true, "summary": "40자 이내 소개 또는 null", "openedOn": "YYYY-MM 또는 YYYY-MM-DD 또는 null", "hours": "11:00-21:00 처럼 또는 null", "lunch": "yes|no|unknown", "closure": "open|closed|moved|temporarily_closed|unknown", "menus": ["대표 메뉴 최대 3개"]}
+{"found": true,
+ "hours": "평일 영업시간 11:00-21:00 형식 또는 null",
+ "breakTime": "15:00-17:00 형식 또는 null",
+ "lastOrder": "20:30 형식 또는 null",
+ "closedDays": "일요일 · 토·일요일 · 연중무휴 처럼 또는 null",
+ "lunch": "yes|no|unknown",
+ "dineIn": "yes|no|unknown",
+ "menus": ["대표 메뉴 최대 3개"],
+ "menuPrice": {"item": "대표 메뉴", "price": 9000} 또는 null,
+ "seats": "좌석 · 단체석 안내 30자 이내 또는 null",
+ "naverPlaceUrl": "찾은 네이버 지도 가게 주소 또는 null",
+ "closure": "open|closed|moved|temporarily_closed|unknown",
+ "openedOn": "YYYY-MM 또는 YYYY-MM-DD 또는 null",
+ "summary": "40자 이내 소개 또는 null"}
 \`\`\`
-가게 정보를 전혀 찾지 못했으면 {"found": false, "lunch": "unknown", "closure": "unknown", "menus": []} 로 답하세요.`;
+가게 정보를 전혀 찾지 못했으면 {"found": false, "lunch": "unknown", "closure": "unknown", "dineIn": "unknown", "menus": []} 로 답하세요.`;
+
+/** 웹 검색 도구 버전: 동적 필터링 버전(20260209)을 지원하지 않는 모델은 기본 버전 */
+export function webSearchToolType(model: string): "web_search_20260209" | "web_search_20250305" {
+  return /^claude-(fable|mythos|opus-5|opus-4-[678]|sonnet-5|sonnet-4-6)/.test(model) ? "web_search_20260209" : "web_search_20250305";
+}
 
 export function createWebSearcher(opts: { apiKey?: string; model?: string; maxUses?: number } = {}) {
   const client = new Anthropic({ apiKey: opts.apiKey, maxRetries: 3 });
@@ -95,7 +161,7 @@ export function createWebSearcher(opts: { apiKey?: string; model?: string; maxUs
         output_config: { effort: "low" },
         tools: [
           {
-            type: "web_search_20260209",
+            type: webSearchToolType(model),
             name: "web_search",
             max_uses: opts.maxUses ?? 4,
             user_location: { type: "approximate", country: "KR", timezone: "Asia/Seoul", ...(city ? { city } : {}) },
@@ -129,6 +195,7 @@ export function createWebSearcher(opts: { apiKey?: string; model?: string; maxUs
         }
       }
     }
-    return toWebInfo(extractJson(text), sources.length ? sources : results, today);
+    const core = place.name.trim().split(/\s+/).filter((t, i, all) => !(i === all.length - 1 && all.length > 1 && /(점|지점|본점|호점)$/.test(t))).join(" ");
+    return toWebInfo(extractJson(text), sources.length ? sources : results, today, { resultUrls: results, core });
   };
 }

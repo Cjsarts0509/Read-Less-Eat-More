@@ -6,15 +6,21 @@
  */
 import { categorize } from "../shared/categories";
 import { haversine, walkMinutes } from "../shared/geo";
-import { computeLunch, computePriceChange, daysBetween, mergePriceHistory, SPONSORED_RE } from "../shared/insights";
+import { pickHours } from "../shared/hours";
+import { computeLunch, computePriceChange, daysBetween, isDeliveryOnly, mergePriceHistory, resolveHours, SPONSORED_RE } from "../shared/insights";
 import type { Branch, BranchPlaces, GoogleInfo, Place, WebInfo } from "../shared/types";
 import { mapLimit } from "./http";
 import type { KakaoPlace } from "./sources/kakao";
-import type { BlogSearchResult } from "./sources/naver";
-import { blogQuery, isAmbiguousName, isRelevantPost, isStrictRelevantPost } from "./sources/naver";
+import type { BlogSearchResult, SearchOptions } from "./sources/naver";
+import { blogQuery, hoursQuery, isAmbiguousName, isRelevantPost, isStrictRelevantPost, rankReviewPosts } from "./sources/naver";
 
-/** NaverInfo 형식 버전 — 올리면 다음 수집 때 모두 다시 조회한다 */
-const NAVER_FORMAT = 2;
+/**
+ * NaverInfo 형식 버전 — 올리면 다음 수집 때 모두 다시 조회한다
+ * 3: 최신순 10개 → 정확도순 100개 (이름만 스쳐 간 글 대신 실제 후기)
+ */
+const NAVER_FORMAT = 3;
+/** 블로그 검색에서 받을 글 수 (정확도순) */
+const NAVER_DISPLAY = 100;
 import type { Analyzer, InsightInput } from "./sources/claude";
 
 export interface CollectConfig {
@@ -28,6 +34,10 @@ export interface CollectConfig {
   /** 웹 검색으로 보강할 블로그 글 수 기준 (이하) */
   webMaxBlogTotal: number;
   webRefreshDays: number;
+  /** 블로그 '영업시간' 검색을 다시 할 간격 (일) */
+  hoursRefreshDays: number;
+  /** 웹 조사 대상: 이 도보 시간(분) 안의 가게 */
+  webMaxWalkMin: number;
 }
 
 export const DEFAULT_CONFIG: CollectConfig = {
@@ -39,14 +49,16 @@ export const DEFAULT_CONFIG: CollectConfig = {
   aiBatchSize: 8,
   aiConcurrency: 2,
   webMaxBlogTotal: 3,
-  webRefreshDays: 30,
+  webRefreshDays: 45,
+  hoursRefreshDays: 30,
+  webMaxWalkMin: 12,
 };
 
 export interface Deps {
   today: string;
   nowIso: string;
   kakao: (branch: Branch) => Promise<KakaoPlace[]>;
-  naver: ((query: string) => Promise<BlogSearchResult>) | null;
+  naver: ((query: string, opts?: SearchOptions) => Promise<BlogSearchResult>) | null;
   google: ((place: Place) => Promise<GoogleInfo | null>) | null;
   analyzer: Analyzer | null;
   /** 블로그 글이 적은 가게를 웹 검색으로 보강 (선택) */
@@ -69,6 +81,8 @@ export interface BranchStats {
   aiAnalyzed: number;
   aiPending: number;
   webChecked: number;
+  hoursCalls: number;
+  hoursFound: number;
   errors: number;
 }
 
@@ -111,6 +125,8 @@ export function toPlace(doc: KakaoPlace, branch: Branch, prev: Place | undefined
     priceHistory: prev?.priceHistory,
     priceChange: prev?.priceChange ?? null,
     web: prev?.web ?? null,
+    hours: prev?.hours ?? null,
+    hoursCheckedAt: prev?.hoursCheckedAt,
     aiPending: prev?.aiPending || undefined,
   };
 }
@@ -128,7 +144,18 @@ export async function collectBranch(
 ): Promise<{ data: BranchPlaces; stats: BranchStats }> {
   const log = deps.log ?? (() => {});
   const { today } = deps;
-  const stats: BranchStats = { kakao: 0, kept: 0, naverCalls: 0, googleCalls: 0, aiAnalyzed: 0, aiPending: 0, webChecked: 0, errors: 0 };
+  const stats: BranchStats = {
+    kakao: 0,
+    kept: 0,
+    naverCalls: 0,
+    googleCalls: 0,
+    aiAnalyzed: 0,
+    aiPending: 0,
+    webChecked: 0,
+    hoursCalls: 0,
+    hoursFound: 0,
+    errors: 0,
+  };
   const prevMap = new Map((prev?.places ?? []).map((p) => [p.id, p]));
 
   // 1) 카카오: 반경 안 음식점
@@ -171,33 +198,92 @@ export async function collectBranch(
       const q = blogQuery(p.name, docs.find((d) => d.id === p.id)?.address_name ?? "", p.address);
       try {
         stats.naverCalls++;
-        const res = await naver(q.query);
-        // 이름이 흔한 단어면 무관한 글이 섞인다 → 이 가게 이야기인 글만 쓰고, 검색 결과 수도 그 비율만큼 줄인다
+        // 정확도순 100개: 최신순으로 받으면 이름만 스쳐 간 글(여행 코스 모음, 납품 후기)이 앞에 온다
+        const res = await naver(q.query, { sort: "sim", display: NAVER_DISPLAY });
+        // 이름이 흔한 단어면 무관한 글이 섞인다 → 이 가게 이야기인 글만 쓴다
         // 한두 글자 이름(「한」「오늘」)은 흔한 낱말과 섞여 검색 수를 믿을 수 없다 → 제목에 이름 + 동네가 함께 있는 글만, 수도 그 글 수만
         const ambiguous = isAmbiguousName(q.core);
         const relevant = res.posts.filter((post) => (ambiguous ? isStrictRelevantPost(post, q) : isRelevantPost(post, q)));
         const relevance = res.posts.length ? relevant.length / res.posts.length : 0;
+        // 정확도순 상위 글에 무관한 글이 섞여 있으면 관련 글은 거의 다 받은 셈 → 그 수를 쓴다.
+        // 상위 글이 거의 다 관련 글이면(인기 가게) 전체 검색 수에 비율을 곱해 어림한다.
+        const blogTotal =
+          ambiguous || relevant.length < res.posts.length * 0.9
+            ? relevant.length
+            : Math.max(relevant.length, Math.round(res.total * relevance));
+        const byDate = [...relevant].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
         const recent = relevant.filter((post) => post.date && daysBetween(post.date, today) <= 30).length;
-        const hadOldFormat = p.naver !== null && (p.naver.v ?? 1) < NAVER_FORMAT;
+        const hadOldFormat = p.naver !== null && (p.naver.v ?? 1) < 2;
         p.naver = {
-          blogTotal: ambiguous ? relevant.length : Math.round(res.total * relevance),
+          blogTotal,
           rawTotal: res.total,
           relevance: Math.round(relevance * 100) / 100,
           ambiguous: ambiguous || undefined,
           v: NAVER_FORMAT,
-          sponsoredHint: relevant.filter((post) => SPONSORED_RE.test(`${post.title} ${post.snippet}`)).length,
+          sponsoredHint: byDate.slice(0, 10).filter((post) => SPONSORED_RE.test(`${post.title} ${post.snippet}`)).length,
           recentPosts: recent,
-          latestPostDate: relevant.find((post) => post.date)?.date ?? null,
-          posts: relevant.slice(0, 3).map(({ title, link, date }) => ({ title, link, date })),
+          latestPostDate: byDate.find((post) => post.date)?.date ?? null,
+          posts: rankReviewPosts(relevant, q.core)
+            .slice(0, 3)
+            .map(({ title, link, date }) => ({ title, link, date })),
           query: q.query,
           checkedAt: today,
         };
-        // 예전 형식으로 분석한 AI 결과는 무관한 글을 읽었을 수 있어 다시 분석한다
+        // 첫 형식(가게와 무관한 글까지 읽음)으로 분석한 AI 결과는 다시 분석한다
         if (hadOldFormat) p.ai = null;
-        freshPosts.set(p.id, relevant);
+        // AI 에는 최근 글 10개를 넘긴다 (새 소식 · 이벤트는 최신 글에 있다)
+        freshPosts.set(p.id, byDate.slice(0, 10));
       } catch (err) {
         stats.errors++;
         log(`  네이버 실패 ${p.name}: ${(err as Error).message}`);
+      }
+    });
+  }
+
+  // 2-2) 블로그 '영업시간' 검색: 가게 이름 + 동네 + 영업시간 으로 찾은 글에서 시각을 읽는다.
+  //      검색 요약문은 검색어 주변을 보여 주므로 영업시간 문장이 잘 걸린다.
+  if (deps.naver) {
+    const naver = deps.naver;
+    const due = places
+      .filter(
+        (p) =>
+          p.naver !== null &&
+          !p.naver.ambiguous &&
+          p.naver.blogTotal > 0 &&
+          p.hours?.source !== "google" &&
+          p.hours?.source !== "web" &&
+          (!p.hoursCheckedAt || daysBetween(p.hoursCheckedAt, today) >= cfg.hoursRefreshDays),
+      )
+      .sort((a, b) => a.walkMin - b.walkMin || popularity(b) - popularity(a));
+    const targets = due.slice(0, Math.max(0, budget.naver));
+    budget.naver -= targets.length;
+    await mapLimit(targets, 4, async (p) => {
+      const q = blogQuery(p.name, docs.find((d) => d.id === p.id)?.address_name ?? "", p.address);
+      try {
+        stats.hoursCalls++;
+        const res = await naver(hoursQuery(q), { sort: "sim", display: 20 });
+        const relevant = res.posts.filter((post) => isRelevantPost(post, q));
+        const found = pickHours(relevant);
+        p.hoursCheckedAt = today;
+        if (found) {
+          stats.hoursFound++;
+          p.hours = {
+            open: found.open,
+            close: found.close,
+            breakStart: found.breakStart,
+            breakEnd: found.breakEnd,
+            lastOrder: found.lastOrder,
+            closedDays: found.closedDays,
+            text: found.text,
+            source: "blog",
+            date: found.date,
+            link: found.link,
+            checkedAt: today,
+          };
+        }
+      } catch (err) {
+        stats.errors++;
+        log(`  영업시간 검색 실패 ${p.name}: ${(err as Error).message}`);
       }
     });
   }
@@ -279,6 +365,7 @@ export async function collectBranch(
             closure: r.closure,
             waiting: r.waiting,
             pace: r.pace,
+            dineIn: r.dineIn,
             adRatio: Math.round(Math.min(1, r.sponsoredPosts / analyzedCount) * 100) / 100,
             analyzedAt: today,
             model: analyzer.model,
@@ -299,18 +386,26 @@ export async function collectBranch(
   }
   stats.aiPending = places.filter((p) => p.aiPending).length;
 
-  // 5) 웹 검색 보강: 블로그 글이 거의 없는 가게 (새로 생긴 곳 먼저)
+  // 5) AI 웹 조사: 추천에 자주 오를 가까운 가게부터 영업시간 · 휴무 · 매장 식사 여부를 확인한다.
+  //    (영업시간을 아직 모르는 곳 → 블로그 글이 거의 없는 새 가게 → 인기순)
   if (deps.web && (budget.web ?? 0) > 0) {
     const web = deps.web;
     const due = places
       .filter(
         (p) =>
           p.category !== "dessert" &&
-          // 네이버를 쓰는데 조회가 안 된 곳(키 오류 등)은 건너뛴다 — 블로그 글이 정말 적은 곳만
-          (deps.naver ? p.naver !== null && p.naver.blogTotal <= cfg.webMaxBlogTotal : true) &&
+          p.category !== "pub" &&
+          !isDeliveryOnly(p) &&
+          p.walkMin <= cfg.webMaxWalkMin &&
+          // 네이버를 쓰는데 조회가 안 된 곳(키 오류 등)은 건너뛴다
+          (deps.naver ? p.naver !== null : true) &&
           (!p.web || daysBetween(p.web.checkedAt, today) >= cfg.webRefreshDays),
       )
-      .sort((a, b) => b.firstSeen.localeCompare(a.firstSeen) || a.distance - b.distance);
+      .sort((a, b) => {
+        const rank = (p: Place) =>
+          (p.hours || p.google?.hoursText ? 2 : 0) + (p.naver && p.naver.blogTotal <= cfg.webMaxBlogTotal ? 0 : 1);
+        return rank(a) - rank(b) || popularity(b) - popularity(a) || a.distance - b.distance;
+      });
     const targets = due.slice(0, Math.max(0, budget.web ?? 0));
     budget.web = (budget.web ?? 0) - targets.length;
     await mapLimit(targets, 2, async (p) => {
@@ -320,6 +415,9 @@ export async function collectBranch(
         if (info) {
           p.web = info;
           if (info.menus.length && !p.ai?.signatureMenus.length && p.ai) p.ai.signatureMenus = info.menus.slice(0, 3);
+          if (info.menuPrice) {
+            p.priceHistory = mergePriceHistory(p.priceHistory, [{ ...info.menuPrice, date: today, source: "web" as const }]);
+          }
         } else {
           p.web = { summary: null, openedOn: null, hours: null, lunch: "unknown", closure: "unknown", menus: [], sources: [], checkedAt: today };
         }
@@ -330,8 +428,10 @@ export async function collectBranch(
     });
   }
 
-  // 6) 가격 변동 · 점심 영업 판정
+  // 6) 영업시간 정리 · 배달 전문 표시 · 가격 변동 · 점심 영업 판정
   for (const p of places) {
+    p.hours = resolveHours(p, today);
+    p.deliveryOnly = isDeliveryOnly(p) || undefined;
     p.priceChange = computePriceChange(p.priceHistory);
     const { status, reason } = computeLunch(p, today);
     p.lunch = status;

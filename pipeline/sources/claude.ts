@@ -39,6 +39,7 @@ const PlaceInsightSchema = z.object({
     note: z.string().nullable(),
   }),
   pace: z.enum(["fast", "normal", "slow", "unknown"]),
+  dineIn: z.enum(["yes", "no", "unknown"]),
   sponsoredPosts: z.number().int(),
   prices: z.array(z.object({ item: z.string(), price: z.number().int(), date: z.string().nullable() })),
 });
@@ -74,6 +75,7 @@ export const SYSTEM_PROMPT = `당신은 회사 근처 점심 식당 정보를 �
 - closure: 폐업 · 이전 · 휴업 단서. 「폐업했어요」「문 닫았」「이전했습니다」「휴업」「임시 휴무(장기)」 같은 표현이 있으면 closed / moved / temporarily_closed, 최근 글에서 영업 중이면 open, 모르면 unknown. note 는 30자 이내 근거(이전이면 옮긴 곳), evidenceDate 는 근거 글 날짜.
 - waiting: 점심 웨이팅. 없거나 바로 앉았다는 글 → none, 10분 안팎 → short, 20분 이상 · 줄이 길다 → long, 모르면 unknown. bestTime 은 "11:50 전" 처럼 추천 도착 시각, note 는 30자 이내.
 - pace: 식사 속도 · 회전. 주문 즉시 나오고 빨리 먹는 곳(국밥 · 분식 · 덮밥) → fast, 코스 · 화덕 · 오래 걸리는 곳 → slow, 그 밖 normal, 모르면 unknown.
+- dineIn: 매장에서 먹을 수 있는가. 「배달 전문」「배달 전용」「홀 없음」「포장 · 배달만」처럼 매장 식사가 안 된다는 근거가 있거나, 모든 글이 배달 · 포장 주문 후기이고 매장 방문 · 좌석 이야기가 하나도 없으면 "no". 매장 방문 · 좌석 · 웨이팅 이야기가 있으면 "yes". 모르면 "unknown".
 - sponsoredPosts: 주어진 글 중 체험단 · 협찬 · 원고료 · 제품 제공처럼 광고성으로 보이는 글의 개수 (0 이상, 글 개수 이하).
 - prices: 글에 나온 1인분 메뉴 가격 (예: {"item": "순대국", "price": 10000, "date": "2026-11-02"}). 원 단위 정수, 세트 · 단품 구분이 애매하면 넣지 않음, 최대 5개. date 는 그 글의 날짜.`;
 
@@ -135,6 +137,7 @@ export function sanitizeInsight(raw: PlaceInsight): PlaceInsight {
       note: raw.waiting.note ? clip(raw.waiting.note.trim(), 50) : null,
     },
     pace: raw.pace,
+    dineIn: raw.dineIn,
     sponsoredPosts: Math.max(0, Math.floor(raw.sponsoredPosts)),
     prices: raw.prices
       .filter((p) => p.item.trim() && Number.isFinite(p.price) && p.price >= 1000 && p.price <= 200000)

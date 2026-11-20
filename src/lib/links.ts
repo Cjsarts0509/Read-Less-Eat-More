@@ -1,15 +1,14 @@
 import type { Branch, Place } from "../../shared/types";
 
-/** 주소에서 구·군·시 하나만 뽑아 검색어를 좁힌다 */
-function districtOf(address: string): string {
-  const tokens = address.split(/\s+/).slice(1);
-  return tokens.find((t) => /(구|군)$/.test(t)) ?? tokens.find((t) => /시$/.test(t)) ?? "";
-}
-
-/** 네이버 지도 검색 — 별점 · 방문자 리뷰 · 영업시간은 네이버 지도에서 확인 */
-export function naverMapUrl(place: Pick<Place, "name" | "address">): string {
-  const q = [place.name, districtOf(place.address)].filter(Boolean).join(" ");
-  return `https://map.naver.com/p/search/${encodeURIComponent(q)}`;
+/**
+ * 네이버 지도 — 별점 · 방문자 리뷰 · 영업시간은 네이버 지도에서 확인.
+ * 가게 번호를 알면 그 가게로 바로, 모르면 가게 이름(지점명 포함) 그대로 검색한다.
+ * 이름 뒤에 구 이름을 붙이면 오히려 검색이 안 되는 경우가 많다 (예: 「삼정모밀 상암점 마포구」).
+ */
+export function naverMapUrl(place: Pick<Place, "name"> & { web?: Place["web"] }): string {
+  const id = place.web?.naverPlaceId;
+  if (id && /^\d+$/.test(id)) return `https://map.naver.com/p/entry/place/${id}`;
+  return `https://map.naver.com/p/search/${encodeURIComponent(place.name.trim())}`;
 }
 
 export function kakaoPlaceUrl(place: Pick<Place, "kakaoUrl" | "id">): string {

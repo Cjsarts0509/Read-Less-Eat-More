@@ -166,7 +166,9 @@ export function App() {
   const showToast = useCallback((msg: string, icon = "✅") => setToast((t) => ({ msg, icon, n: (t?.n ?? 0) + 1 })), []);
 
   const ctx: Ctx = useMemo(() => ({ today, baselineDate: DEMO ? null : (index?.baselineDate ?? null) }), [today, index]);
-  const all = places.status === "ready" ? places.data.places : [];
+  // 배달 · 포장 전문점은 목록 · 지도 · 뽑기에서 뺀다
+  const all = useMemo(() => (places.status === "ready" ? places.data.places.filter((p) => !p.deliveryOnly) : []), [places]);
+  const hiddenDelivery = places.status === "ready" ? places.data.places.length - all.length : 0;
   const filtered = useMemo(() => applyFilters(all, filters, ctx), [all, filters, ctx]);
   const counts = useMemo(() => countByCategory(filtered), [filtered]);
   const inTab = useMemo(() => (tab === "all" ? filtered : filtered.filter((p) => p.category === tab)), [filtered, tab]);
@@ -426,8 +428,10 @@ export function App() {
               <p className="hint">
                 📍 {selected.address}
                 {filters.walk ? ` · 점선 안이 도보 ${filters.walk}분 거리` : ""}
+                {hiddenDelivery > 0 && ` · 배달 · 포장 전문점 ${hiddenDelivery}곳은 뺐어요`}
               </p>
-              <div ref={areaMapRef}>
+              <div className="shelf-area">
+              <div ref={areaMapRef} className="shelf-area__map">
                 <BranchMap
                   mode="area"
                   branches={branches}
@@ -440,6 +444,7 @@ export function App() {
                 />
               </div>
 
+              <div className="shelf-area__list">
               {sorted.length === 0 ? (
                 <p className="empty">조건에 맞는 식당이 없어요. 도보 거리를 늘리거나 책갈피를 바꿔 보세요.</p>
               ) : (
@@ -462,6 +467,8 @@ export function App() {
                   {sorted.length - visible}권 더 꺼내 보기
                 </button>
               )}
+              </div>
+              </div>
             </section>
           </>
         )}

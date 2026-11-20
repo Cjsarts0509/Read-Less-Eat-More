@@ -94,6 +94,28 @@ export interface GoogleInfo {
   hoursText: string[] | null;
   mapsUrl: string | null;
   businessStatus: string | null;
+  /** 매장 식사 가능 · 배달 여부 */
+  dineIn?: boolean | null;
+  delivery?: boolean | null;
+  checkedAt: string;
+}
+
+/** 영업시간 (평일 기준). 시각은 "HH:MM", 자정을 넘기면 "26:00" 처럼 24 이상 */
+export interface HoursInfo {
+  open: string | null;
+  close: string | null;
+  breakStart: string | null;
+  breakEnd: string | null;
+  lastOrder: string | null;
+  /** 정기 휴무 (예: "일요일", "토·일요일", "연중무휴") */
+  closedDays: string | null;
+  /** 근거 문장 */
+  text: string;
+  /** blog: 블로그 '영업시간' 검색, web: AI 웹 조사, google: Google 지도 */
+  source: "blog" | "web" | "google";
+  /** 근거 글 날짜 */
+  date: string | null;
+  link: string | null;
   checkedAt: string;
 }
 
@@ -112,9 +134,21 @@ export interface WebInfo {
   summary: string | null;
   openedOn: string | null;
   hours: string | null;
+  /** 웹에서 찾은 영업시간을 나눠 담은 것 */
+  breakTime?: string | null;
+  lastOrder?: string | null;
+  closedDays?: string | null;
   lunch: "yes" | "no" | "unknown";
   closure: ClosureState;
+  /** 매장에서 먹을 수 있는가 (no = 배달 · 포장 전문) */
+  dineIn?: "yes" | "no" | "unknown";
   menus: string[];
+  /** 대표 메뉴 1인 가격 */
+  menuPrice?: { item: string; price: number } | null;
+  /** 좌석 · 단체석 안내 */
+  seats?: string | null;
+  /** 네이버 지도 가게 번호 (찾았을 때만) */
+  naverPlaceId?: string | null;
   sources: Array<{ title: string; url: string }>;
   checkedAt: string;
 }
@@ -135,6 +169,8 @@ export interface AiInsight {
   waiting?: { level: WaitLevel; bestTime: string | null; note: string | null };
   /** 식사 속도 (회전율) */
   pace?: Pace;
+  /** 매장 식사 가능 여부 (no = 배달 · 포장 전문) */
+  dineIn?: "yes" | "no" | "unknown";
   /** 분석한 글 중 협찬 · 체험단으로 보이는 글 비율 0~1 */
   adRatio?: number;
   analyzedAt: string;
@@ -172,6 +208,12 @@ export interface Place {
   priceChange?: { item: string; from: number; to: number; date: string | null } | null;
   /** 블로그 글이 적은 새 가게를 웹 검색으로 보강한 정보 */
   web?: WebInfo | null;
+  /** 영업시간 (Google > 웹 조사 > 블로그 순으로 믿는다) */
+  hours?: HoursInfo | null;
+  /** 블로그 '영업시간' 검색을 마지막으로 한 날 (못 찾았어도 기록) */
+  hoursCheckedAt?: string;
+  /** 배달 · 포장 전문점이라 매장에서 먹을 수 없음 */
+  deliveryOnly?: boolean;
   /** AI 예산이 모자라 분석을 미룬 경우 (다음 수집 때 우선 처리) */
   aiPending?: boolean;
 }

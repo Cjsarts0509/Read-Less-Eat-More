@@ -1,4 +1,5 @@
-import type { Badge, BadgeType, ClosureState, GoogleInfo, LunchStatus, Place, PricePoint } from "./types";
+import { formatHours, hoursOpenAtLunch, parseClosedDays, parseHoursText } from "./hours";
+import type { Badge, BadgeType, ClosureState, GoogleInfo, HoursInfo, LunchStatus, Place, PricePoint } from "./types";
 
 export const BADGE_META: Record<BadgeType, { label: string; tone: string; maxAgeDays: number }> = {
   new_open: { label: "신규 오픈", tone: "green", maxAgeDays: 90 },
@@ -148,8 +149,80 @@ export function computePriceChange(history: PricePoint[] | undefined): Place["pr
   return best;
 }
 
+export const HOURS_SOURCE_LABEL: Record<HoursInfo["source"], string> = {
+  google: "Google 지도",
+  web: "웹 조사",
+  blog: "블로그",
+};
+
+/** 블로그 영업시간이 이보다 오래된 글에서 나왔으면 '바뀌었을 수 있음' */
+export const HOURS_STALE_DAYS = 365;
+
+const GOOGLE_WEEKDAYS = ["월요일", "화요일", "수요일", "목요일", "금요일"];
+
+/** Google 요일별 영업시간 문장("월요일: 오전 11:00~오후 9:00")을 HoursInfo 로 */
+export function hoursFromGoogle(g: GoogleInfo | null | undefined): HoursInfo | null {
+  const lines = g?.hoursText;
+  if (!g || !lines?.length) return null;
+  const closed = lines.filter((l) => /휴무|closed/i.test(l)).map((l) => l.slice(0, 1));
+  const line = lines.find((l) => GOOGLE_WEEKDAYS.some((d) => l.startsWith(d)) && !/휴무|closed/i.test(l));
+  if (!line) return null;
+  const body = line.replace(/^[^:]+:\s*/, "");
+  const parsed = /24시간/.test(body)
+    ? { open: "00:00", close: "24:00", breakStart: null, breakEnd: null, lastOrder: null, closedDays: null }
+    : parseHoursText(body.replace(/,\s*/g, " / "));
+  if (!parsed) return null;
+  return {
+    ...parsed,
+    closedDays: closed.length ? parseClosedDays(`${closed.join(",")} 휴무`) : null,
+    text: line,
+    source: "google",
+    date: g.checkedAt,
+    link: g.mapsUrl,
+    checkedAt: g.checkedAt,
+  };
+}
+
+/** 웹 조사에서 찾은 영업시간 문장을 HoursInfo 로 */
+export function hoursFromWeb(w: Place["web"]): HoursInfo | null {
+  if (!w?.hours) return null;
+  const text = [w.hours, w.breakTime ? `브레이크타임 ${w.breakTime}` : "", w.lastOrder ? `라스트오더 ${w.lastOrder}` : ""].join(" ");
+  const parsed = parseHoursText(text);
+  if (!parsed) return null;
+  const closedDays = w.closedDays ? (parseClosedDays(/휴무|무휴/.test(w.closedDays) ? w.closedDays : `${w.closedDays} 휴무`) ?? null) : parsed.closedDays;
+  return {
+    ...parsed,
+    closedDays,
+    text: text.trim(),
+    source: "web",
+    date: w.checkedAt,
+    link: w.sources[0]?.url ?? null,
+    checkedAt: w.checkedAt,
+  };
+}
+
+/** 영업시간 출처를 고른다: Google > 웹 조사 > 블로그 */
+export function resolveHours(place: Pick<Place, "google" | "web" | "hours">, _today?: string): HoursInfo | null {
+  const g = hoursFromGoogle(place.google);
+  if (g) return g;
+  const w = hoursFromWeb(place.web);
+  if (w) return w;
+  return place.hours?.source === "blog" ? place.hours : null;
+}
+
+/** 이름 · 분류로 보이는 배달 · 포장 전문점 */
+export const DELIVERY_NAME_RE = /배달\s*전문|배달\s*전용|배달점|배달만|딜리버리|delivery|공유\s*주방|배민\s*키친|고스트\s*키친|포장\s*전문|테이크\s*아웃\s*전문|\(배달\)/i;
+
+/** 매장에서 먹을 수 없는 배달 · 포장 전문점인가 */
+export function isDeliveryOnly(place: Pick<Place, "name" | "categoryPath" | "ai" | "web" | "google">): boolean {
+  if (DELIVERY_NAME_RE.test(`${place.name} ${place.categoryPath}`)) return true;
+  if (place.google?.dineIn === false && place.google?.delivery) return true;
+  if (place.web?.dineIn === "no") return true;
+  return place.ai?.dineIn === "no" && place.web?.dineIn !== "yes" && place.google?.dineIn !== true;
+}
+
 export function computeLunch(
-  place: Pick<Place, "category"> & { google: GoogleInfo | null; ai: Place["ai"]; web?: Place["web"] },
+  place: Pick<Place, "category"> & { google: GoogleInfo | null; ai: Place["ai"]; web?: Place["web"]; hours?: Place["hours"] },
   today = new Date().toISOString().slice(0, 10),
 ): { status: LunchStatus; reason: string } {
   const g = place.google;
@@ -159,6 +232,14 @@ export function computeLunch(
   if (g?.businessStatus === "CLOSED_TEMPORARILY") return { status: "closed", reason: "임시 휴업 (Google)" };
   if (g?.openAtLunch === true) return { status: "open", reason: "영업시간 확인됨 (Google)" };
   if (g?.openAtLunch === false) return { status: "unlikely", reason: "평일 점심엔 문을 닫아요 (Google 영업시간)" };
+  const h = place.hours;
+  if (h) {
+    const at = hoursOpenAtLunch(h);
+    const from = HOURS_SOURCE_LABEL[h.source];
+    const stale = h.source === "blog" && (!h.date || daysBetween(h.date, today) > HOURS_STALE_DAYS);
+    if (at === true) return { status: stale ? "likely" : "open", reason: `${from} 영업시간 기준${stale ? " (오래된 글)" : ""}` };
+    if (at === false) return { status: "unlikely", reason: `${formatHours(h)} (${from})` };
+  }
   if (place.ai?.lunch === "yes") return { status: "likely", reason: place.ai.lunchNote || "리뷰상 점심 영업" };
   if (place.ai?.lunch === "no") return { status: "unlikely", reason: place.ai.lunchNote || "리뷰상 저녁 위주" };
   if (place.web?.lunch === "yes") return { status: "likely", reason: place.web.hours ? `영업시간 ${place.web.hours} (웹)` : "웹 검색상 점심 영업" };

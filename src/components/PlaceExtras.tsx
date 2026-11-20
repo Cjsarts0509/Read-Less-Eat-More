@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import type { MenuReport } from "../../shared/api";
-import { adRatioOf, closureOf, CLOSURE_LABEL } from "../../shared/insights";
+import { formatHours } from "../../shared/hours";
+import { adRatioOf, closureOf, CLOSURE_LABEL, daysBetween, HOURS_SOURCE_LABEL, HOURS_STALE_DAYS } from "../../shared/insights";
 import { estimateLunchTime } from "../../shared/time";
 import type { Place } from "../../shared/types";
 import { savedNickname, uploadMenuPhoto } from "../lib/api";
@@ -52,17 +53,51 @@ export function PlaceSignals({ place }: { place: Place }) {
   );
 }
 
-/** 웹 검색으로 보강한 정보 (블로그 글이 거의 없는 새 가게) */
+/** 영업시간 한 줄: 시각 · 브레이크 · 라스트오더 · 휴무 + 출처 */
+export function HoursLine({ place, ctx }: { place: Place; ctx: Ctx }) {
+  const h = place.hours;
+  const text = h ? formatHours(h) : "";
+  if (!h || !text) return null;
+  const from = HOURS_SOURCE_LABEL[h.source];
+  const when = h.source === "blog" && h.date ? ` ${h.date.slice(2).replaceAll("-", ".")} 글` : "";
+  const stale = h.source === "blog" && (!h.date || daysBetween(h.date, ctx.today) > HOURS_STALE_DAYS);
+  return (
+    <p className="hours" title={h.text}>
+      <span aria-hidden>🕐</span> <b className="hours__txt">{text}</b>{" "}
+      <span className="hours__src">
+        {h.link ? (
+          <a href={h.link} target="_blank" rel="noreferrer">
+            {from}
+            {when}
+          </a>
+        ) : (
+          <>
+            {from}
+            {when}
+          </>
+        )}
+      </span>
+      {stale && <span className="hours__stale">바뀌었을 수 있어요</span>}
+    </p>
+  );
+}
+
+/** AI 웹 조사로 찾은 정보 */
 export function WebInfoBox({ place }: { place: Place }) {
   const w = place.web;
-  if (!w || (!w.summary && !w.hours && !w.openedOn)) return null;
+  const hoursShown = Boolean(place.hours && place.hours.source !== "blog");
+  const facts = [
+    w?.openedOn && `개업 ${w.openedOn}`,
+    !hoursShown && w?.hours && `영업 ${w.hours}`,
+    w?.menuPrice && `${w.menuPrice.item} ${won(w.menuPrice.price)}`,
+    w?.seats && `좌석 ${w.seats}`,
+  ].filter(Boolean);
+  if (!w || (!w.summary && !facts.length)) return null;
   return (
     <div className="webinfo">
-      <p className="webinfo__head">🌐 웹에서 찾은 정보</p>
+      <p className="webinfo__head">🌐 AI 웹 조사</p>
       {w.summary && <p>{w.summary}</p>}
-      <p className="muted">
-        {[w.openedOn && `개업 ${w.openedOn}`, w.hours && `영업 ${w.hours}`].filter(Boolean).join(" · ")}
-      </p>
+      {facts.length > 0 && <p className="muted">{facts.join(" · ")}</p>}
       {w.sources.length > 0 && (
         <p className="webinfo__src">
           출처:{" "}

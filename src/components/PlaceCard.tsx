@@ -5,7 +5,7 @@ import type { MenuReport } from "../../shared/api";
 import { bookTitleOf } from "../lib/booktitle";
 import { badgesOf, type Ctx } from "../lib/filters";
 import { directionsUrl, kakaoPlaceUrl, naverMapUrl } from "../lib/links";
-import { ClosureNotice, MenuReports, PlaceSignals, WebInfoBox } from "./PlaceExtras";
+import { ClosureNotice, HoursLine, MenuReports, PlaceSignals, WebInfoBox } from "./PlaceExtras";
 
 interface Props {
   place: Place;
@@ -139,6 +139,7 @@ export function PlaceCard({ place, ctx, highlighted, onShowOnMap, menus, upload 
 
       <PlaceSignals place={place} />
       <LunchLine place={place} />
+      <HoursLine place={place} ctx={ctx} />
       {ai?.lunchNote && place.lunchReason !== ai.lunchNote && <p className="card__note">💡 {ai.lunchNote}</p>}
       <WebInfoBox place={place} />
       <MenuReports

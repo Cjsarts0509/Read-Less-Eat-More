@@ -12,7 +12,8 @@
  *   BRANCHES                쉼표로 지점 코드 제한 (전체)
  *   RADIUS_M (1000) · MAX_PLACES_PER_BRANCH (400) · NAVER_REFRESH_DAYS (3) · NAVER_DAILY_BUDGET (20000)
  *   AI_MAX_PLACES_PER_RUN (300) · AI_BATCH_SIZE (8) · GOOGLE_MAX_PER_BRANCH (0) · GOOGLE_REFRESH_DAYS (30)
- *   WEB_SEARCH_MAX_PER_RUN (20) — 블로그 글이 거의 없는 가게를 Claude 웹 검색으로 보강 (0 이면 끔)
+ *   WEB_SEARCH_MAX_PER_RUN (20) — 가까운 가게의 영업시간 · 휴무 · 배달 전용 여부를 Claude 웹 검색으로 조사 (0 이면 끔)
+ *   WEB_MODEL               웹 조사에 쓸 모델 (CLAUDE_MODEL 과 같음)
  */
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -72,7 +73,9 @@ async function main() {
   const now = new Date();
   const today = todayKst(now);
   let kakaoCalls = 0;
-  const webSearch = anthropicKey ? createWebSearcher({ apiKey: anthropicKey, model: process.env.CLAUDE_MODEL }) : null;
+  const webSearch = anthropicKey
+    ? createWebSearcher({ apiKey: anthropicKey, model: process.env.WEB_MODEL || process.env.CLAUDE_MODEL })
+    : null;
   const regionCity = new Map<string, string>();
 
   const deps: Deps = {
@@ -80,7 +83,7 @@ async function main() {
     nowIso: now.toISOString(),
     kakao: (b) =>
       collectNearby({ apiKey: kakaoKey, center: { lat: b.lat, lng: b.lng }, radius: cfg.radius, onRequest: () => kakaoCalls++ }),
-    naver: naverId && naverSecret ? (q) => searchBlog(q, { clientId: naverId, clientSecret: naverSecret }) : null,
+    naver: naverId && naverSecret ? (q, o) => searchBlog(q, { clientId: naverId, clientSecret: naverSecret }, fetch, o) : null,
     google: googleKey ? (p) => lookupGoogle(p, googleKey, today) : null,
     analyzer: anthropicKey ? createClaudeAnalyzer({ apiKey: anthropicKey, model: process.env.CLAUDE_MODEL }) : null,
     web: webSearch ? (p) => webSearch(p, today, regionCity.get(p.id)) : null,
@@ -155,7 +158,7 @@ async function main() {
       await writeFile(file, serializeBranchPlaces(data), "utf8");
       index.branches[branch.code] = { updatedAt: data.generatedAt, count: data.places.length };
       console.log(
-        `✅ ${branch.label.padEnd(8)} 카카오 ${stats.kakao} → ${stats.kept}곳 · 네이버 ${stats.naverCalls} · Google ${stats.googleCalls} · AI ${stats.aiAnalyzed}${stats.aiPending ? ` (대기 ${stats.aiPending})` : ""} · 웹 ${stats.webChecked}${stats.errors ? ` · 오류 ${stats.errors}` : ""}`,
+        `✅ ${branch.label.padEnd(8)} 카카오 ${stats.kakao} → ${stats.kept}곳 · 네이버 ${stats.naverCalls} · Google ${stats.googleCalls} · AI ${stats.aiAnalyzed}${stats.aiPending ? ` (대기 ${stats.aiPending})` : ""} · 영업시간 ${stats.hoursFound}/${stats.hoursCalls} · 웹 ${stats.webChecked}${stats.errors ? ` · 오류 ${stats.errors}` : ""}`,
       );
     } catch (err) {
       failures++;

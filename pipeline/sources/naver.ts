@@ -117,6 +117,21 @@ export function isStrictRelevantPost(post: { title: string }, q: Pick<BlogQuery,
   return isRelevantPost({ title: post.title, snippet: "" }, q);
 }
 
+/** 영업시간을 찾는 검색어: 가게 이름 + 동네 + 영업시간 */
+export function hoursQuery(q: Pick<BlogQuery, "core" | "hint">): string {
+  return q.hint && !q.core.includes(q.hint) ? `"${q.core}" ${q.hint} 영업시간` : `"${q.core}" 영업시간`;
+}
+
+/**
+ * 리뷰로 보여 줄 글 순서: 제목에 가게 이름이 있는 글(방문 후기일 가능성이 높다)을 먼저, 그 안에서는 최신순.
+ * 본문에 이름만 스쳐 지나가는 글(여행 코스 모음, 납품 후기 등)은 뒤로 간다.
+ */
+export function rankReviewPosts<T extends { title: string; date: string | null }>(posts: T[], core: string): T[] {
+  const name = squash(core);
+  const inTitle = (p: T) => (squash(p.title).includes(name) ? 0 : 1);
+  return [...posts].sort((a, b) => inTitle(a) - inTitle(b) || (b.date ?? "").localeCompare(a.date ?? ""));
+}
+
 /** 검색어 문자열만 */
 export function buildQuery(name: string, jibunAddress: string, roadAddress: string): string {
   return blogQuery(name, jibunAddress, roadAddress).query;
@@ -136,17 +151,26 @@ export function isRelevantPost(post: { title: string; snippet: string }, q: Pick
   return area.some((a) => text.includes(squash(a)));
 }
 
+export interface SearchOptions {
+  /** sim: 정확도순 (기본) · date: 최신순 */
+  sort?: "sim" | "date";
+  /** 받을 글 수 1~100 */
+  display?: number;
+}
+
 export async function searchBlog(
   query: string,
   creds: { clientId: string; clientSecret: string },
   fetchImpl: FetchLike = fetch,
+  opts: SearchOptions = {},
 ): Promise<BlogSearchResult> {
   const fixed = (typeof process !== "undefined" ? process.env.NAVER_API_MODE : undefined) as Mode | undefined;
   const order: Mode[] = workingMode ? [workingMode] : fixed === "hub" || fixed === "legacy" ? [fixed] : ["hub", "legacy"];
 
   let lastErr: unknown;
   for (const mode of order) {
-    const params = new URLSearchParams({ query, display: "10", start: "1", sort: "date" });
+    const display = String(Math.min(100, Math.max(1, opts.display ?? 10)));
+    const params = new URLSearchParams({ query, display, start: "1", sort: opts.sort ?? "sim" });
     if (mode === "hub") params.set("format", "json");
     try {
       const data = await fetchJson<NaverBlogResponse>(fetchImpl, `${ENDPOINTS[mode]}?${params}`, {

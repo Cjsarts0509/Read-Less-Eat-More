@@ -145,9 +145,9 @@ select {
 /* ---------- 틀 ---------- */
 
 .wrap {
-  max-width: 1080px;
+  max-width: 1480px;
   margin: 0 auto;
-  padding: 28px 16px 24px;
+  padding: 28px clamp(16px, 2.2vw, 32px) 24px;
   display: flex;
   flex-direction: column;
   gap: 28px;
@@ -1843,6 +1843,56 @@ select {
   display: grid;
   gap: 18px;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+}
+
+/* 넓은 화면: 지도는 왼쪽에 붙여 두고 카드는 오른쪽에 펼친다 */
+@media (min-width: 1180px) {
+  .shelf-area {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    gap: 24px;
+    align-items: start;
+  }
+  .shelf-area__map {
+    position: sticky;
+    top: 16px;
+  }
+  .shelf-area__map .map {
+    height: calc(100vh - 48px);
+    max-height: 820px;
+  }
+  .shelf-area__list .grid {
+    margin-top: 0;
+  }
+}
+
+.hours {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.hours__txt {
+  font-weight: 700;
+}
+
+.hours__src {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-60);
+}
+
+.hours__src a {
+  color: inherit;
+}
+
+.hours__stale {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border: 1.5px solid var(--ink);
+  border-radius: 999px;
+  font-size: 10px;
+  background: var(--mustard-soft);
 }
 
 .card {

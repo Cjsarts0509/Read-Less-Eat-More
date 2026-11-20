@@ -18,6 +18,8 @@ interface GooglePlace {
   userRatingCount?: number;
   businessStatus?: string;
   googleMapsUri?: string;
+  dineIn?: boolean;
+  delivery?: boolean;
   regularOpeningHours?: {
     periods?: Array<{
       open?: { day: number; hour: number; minute: number };
@@ -37,6 +39,8 @@ const FIELD_MASK = [
   "places.businessStatus",
   "places.googleMapsUri",
   "places.regularOpeningHours",
+  "places.dineIn",
+  "places.delivery",
 ].join(",");
 
 /** 이름 비교용: 공백·괄호·'점' 접미사를 뺀다 */
@@ -87,6 +91,8 @@ export async function lookupGoogle(
     hoursText: match.regularOpeningHours?.weekdayDescriptions ?? null,
     mapsUrl: match.googleMapsUri ?? null,
     businessStatus: match.businessStatus ?? null,
+    dineIn: match.dineIn ?? null,
+    delivery: match.delivery ?? null,
     checkedAt: today,
   };
 }

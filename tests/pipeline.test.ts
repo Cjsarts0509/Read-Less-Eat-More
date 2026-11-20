@@ -11,6 +11,7 @@ const EXTRA = {
   closure: { state: "open" as const, note: null, evidenceDate: null },
   waiting: { level: "unknown" as const, bestTime: null, note: null },
   pace: "unknown" as const,
+  dineIn: "unknown" as const,
   sponsoredPosts: 0,
   prices: [] as Array<{ item: string; price: number; date: string | null }>,
 };
@@ -401,7 +402,7 @@ describe("블로그 글 관련성 (흔한 이름의 부풀려진 검색 수 거�
     expect(isRelevantPost({ title: "김치찌개 맛집", snippet: "" }, q2)).toBe(false);
   });
 
-  it("검색 결과 수를 관련 글 비율만큼 줄이고, 무관한 글은 AI 에 넘기지 않는다", async () => {
+  it("정확도순 상위 글에 무관한 글이 섞이면 관련 글 수만 세고, 무관한 글은 AI 에 넘기지 않는다", async () => {
     const seenByAi: number[] = [];
     const deps: Deps = {
       today: "2026-11-20",
@@ -427,8 +428,52 @@ describe("블로그 글 관련성 (흔한 이름의 부풀려진 검색 수 거�
     const n = data.places[0]!.naver!;
     expect(n.rawTotal).toBe(300000);
     expect(n.relevance).toBe(0.5);
-    expect(n.blogTotal).toBe(150000);
+    expect(n.blogTotal).toBe(1);
     expect(seenByAi).toEqual([1]);
+  });
+
+  it("정확도순 상위 글이 거의 다 관련 글이면(인기 가게) 전체 검색 수에 비율을 곱해 어림한다", async () => {
+    const posts = Array.from({ length: 100 }, (_, i) => ({
+      title: `종로1가 오늘의식탁 후기 ${i}`,
+      link: String(i),
+      date: "2026-11-01",
+      snippet: "",
+    }));
+    const opts: Array<{ sort?: string; display?: number } | undefined> = [];
+    const deps: Deps = {
+      today: "2026-11-20",
+      nowIso: "",
+      kakao: async () => [kakaoDoc("x", "오늘의식탁", 0.001)],
+      naver: async (q, o) => {
+        if (!q.includes("영업시간")) opts.push(o);
+        return { total: 5000, posts };
+      },
+      google: null,
+      analyzer: null,
+    };
+    const { data } = await collectBranch(branch, null, DEFAULT_CONFIG, deps, { naver: 10, google: 0, ai: 0 });
+    expect(data.places[0]!.naver!.blogTotal).toBe(5000);
+    expect(opts[0]).toEqual({ sort: "sim", display: 100 });
+  });
+
+  it("리뷰로 보여 줄 글은 제목에 가게 이름이 있는 글을 먼저 고른다", async () => {
+    const deps: Deps = {
+      today: "2026-11-20",
+      nowIso: "",
+      kakao: async () => [kakaoDoc("x", "삼정모밀 상암점", 0.001)],
+      naver: async () => ({
+        total: 3,
+        posts: [
+          { title: "송파 목공방 세이로무시 납품기", link: "a", date: "2026-11-07", snippet: "삼정모밀에 납품한 밥통" },
+          { title: "상암동 점심 삼정모밀 판모밀 후기", link: "b", date: "2026-09-01", snippet: "" },
+          { title: "상암 당일치기 코스", link: "c", date: "2026-10-04", snippet: "삼정모밀 들러서" },
+        ],
+      }),
+      google: null,
+      analyzer: null,
+    };
+    const { data } = await collectBranch(branch, null, DEFAULT_CONFIG, deps, { naver: 10, google: 0, ai: 0 });
+    expect(data.places[0]!.naver!.posts.map((p) => p.link)).toEqual(["b", "a", "c"]);
   });
 });
 
@@ -468,7 +513,7 @@ describe("AI 대기 중인 곳 다시 조회", () => {
       sources: [],
       places: docs.map((d, i) => ({
         ...toPlace(d, branch, undefined, "2026-11-19"),
-        naver: { blogTotal: i, recentPosts: 0, latestPostDate: null, posts: [], query: "", checkedAt: "2026-11-19", v: 2, relevance: 1 },
+        naver: { blogTotal: i, recentPosts: 0, latestPostDate: null, posts: [], query: "", checkedAt: "2026-11-19", v: 3, relevance: 1 },
         aiPending: true,
       })),
     };
@@ -478,7 +523,7 @@ describe("AI 대기 중인 곳 다시 조회", () => {
       nowIso: "",
       kakao: async () => docs,
       naver: async (q) => {
-        asked.push(q);
+        if (!q.includes("영업시간")) asked.push(q);
         return { total: 0, posts: [] };
       },
       google: null,
