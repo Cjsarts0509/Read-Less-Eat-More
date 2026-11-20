@@ -57,6 +57,10 @@ export interface Badge {
   detail: string;
   /** 근거가 된 리뷰 날짜 YYYY-MM-DD */
   evidenceDate: string | null;
+  /** 블로그 글 제목 · 요약의 낱말로 찾은 것 (AI 확인 전) */
+  auto?: boolean;
+  /** 근거 글 주소 */
+  link?: string;
 }
 
 export interface BlogPost {
@@ -216,6 +220,8 @@ export interface Place {
   deliveryOnly?: boolean;
   /** AI 예산이 모자라 분석을 미룬 경우 (다음 수집 때 우선 처리) */
   aiPending?: boolean;
+  /** 블로그 글 낱말로 찾은 새 소식 (AI 분석 전에도 보이도록) */
+  autoBadges?: Badge[];
 }
 
 export interface BranchPlaces {

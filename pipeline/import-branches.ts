@@ -15,6 +15,8 @@ const SHEET_NAME = "지점 주소 (수불처)";
 const OUT = path.resolve("public/data/branches.json");
 /** 엑셀에 없는 지점 (본사 등). 좌표가 대략이면 coordSource "approx" — 수집 때 카카오로 맞춘다 */
 const EXTRA = path.resolve("pipeline/extra-branches.json");
+/** 엑셀 값을 고쳐 쓸 지점 정보 (예: 사업단이 비어 있는 지점) */
+const OVERRIDES = path.resolve("pipeline/branch-overrides.json");
 
 const REGION_PREFIX: Array<[string, string]> = [
   ["서울", "서울"],
@@ -115,6 +117,9 @@ async function main() {
     const known = current.find((b) => b.code === e.code && b.coordSource === "kakao");
     branches.push(known ? { ...e, lat: known.lat, lng: known.lng, coordSource: "kakao" } : e);
   }
+
+  const overrides = JSON.parse(await readFile(OVERRIDES, "utf8").catch(() => "{}")) as Record<string, Partial<Branch>>;
+  for (const b of branches) Object.assign(b, overrides[b.code] ?? {});
 
   // '(미지정)' 사업단은 맨 뒤로
   const unassigned = (d: string) => (d.startsWith("(") ? 1 : 0);

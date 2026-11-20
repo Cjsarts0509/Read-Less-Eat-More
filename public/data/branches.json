@@ -352,6 +352,17 @@
     "coordSource": "bookgrid"
   },
   {
+    "code": "034",
+    "name": "천안",
+    "label": "천안점",
+    "division": "남부사업단",
+    "region": "충남",
+    "address": "충청남도 천안시 동남구 만남로 43, 신세계백화점 천안아산점 B관 3층",
+    "lat": 36.8195,
+    "lng": 127.1563,
+    "coordSource": "bookgrid"
+  },
+  {
     "code": "048",
     "name": "칠곡",
     "label": "칠곡점",
@@ -383,16 +394,5 @@
     "lat": 37.7162912972645,
     "lng": 126.687947131539,
     "coordSource": "kakao"
-  },
-  {
-    "code": "034",
-    "name": "천안",
-    "label": "천안점",
-    "division": "(미지정)",
-    "region": "충남",
-    "address": "충청남도 천안시 동남구 만남로 43, 신세계백화점 천안아산점 B관 3층",
-    "lat": 36.8195,
-    "lng": 127.1563,
-    "coordSource": "bookgrid"
   }
 ]

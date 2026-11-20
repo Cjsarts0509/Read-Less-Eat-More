@@ -1,30 +1,25 @@
 import { CATEGORY_BY_KEY } from "../../shared/categories";
-import { BADGE_META, isNewlyListed, LUNCH_LABEL } from "../../shared/insights";
+import { BADGE_META, closureOf, CLOSURE_LABEL, isNewlyListed, LUNCH_LABEL } from "../../shared/insights";
+import { estimateLunchTime } from "../../shared/time";
 import type { Place } from "../../shared/types";
-import type { MenuReport } from "../../shared/api";
-import { bookTitleOf } from "../lib/booktitle";
 import { badgesOf, type Ctx } from "../lib/filters";
 import { directionsUrl, kakaoPlaceUrl, naverMapUrl } from "../lib/links";
-import { ClosureNotice, HoursLine, MenuReports, PlaceSignals, WebInfoBox } from "./PlaceExtras";
-
-interface Props {
-  place: Place;
-  ctx: Ctx;
-  highlighted?: boolean;
-  onShowOnMap?: (id: string) => void;
-  menus?: MenuReport[];
-  /** 메뉴판 사진 올리기 (저장소 · AI 가 켜져 있을 때) */
-  upload?: { branch: string; onDone: () => void } | null;
-}
 
 const fmt = new Intl.NumberFormat("ko-KR");
 
-export function Badges({ place, ctx }: { place: Place; ctx: Ctx }) {
+/** 새 소식 배지 (신규 오픈 · 이벤트 · 할인 · 시즌/신메뉴 · 점심 특선) + 폐업 의심 */
+export function Badges({ place, ctx, withClosure = false }: { place: Place; ctx: Ctx; withClosure?: boolean }) {
   const badges = badgesOf(place, ctx);
   const listed = isNewlyListed(place, ctx.baselineDate, ctx.today);
-  if (!badges.length && !listed) return null;
+  const closure = withClosure ? closureOf(place, ctx.today) : null;
+  if (!badges.length && !listed && !closure) return null;
   return (
     <ul className="badges" aria-label="새 소식">
+      {closure && (
+        <li className="badge badge--red" title={closure.note}>
+          <b>⚠</b> {CLOSURE_LABEL[closure.state]}
+        </li>
+      )}
       {listed && !badges.some((b) => b.type === "new_open") && (
         <li className="badge badge--green" title={`지도에 ${place.firstSeen} 처음 등록됐어요`}>
           <b>NEW</b> 지도 신규 등록
@@ -34,7 +29,7 @@ export function Badges({ place, ctx }: { place: Place; ctx: Ctx }) {
         <li
           key={b.type}
           className={`badge badge--${BADGE_META[b.type].tone}`}
-          title={`${b.detail}${b.evidenceDate ? ` (${b.evidenceDate} 리뷰)` : ""}`}
+          title={`${b.detail}${b.evidenceDate ? ` (${b.evidenceDate} ${b.auto ? "블로그 글" : "리뷰"})` : ""}`}
         >
           <b>{BADGE_META[b.type].label}</b> {b.label}
         </li>
@@ -62,7 +57,7 @@ export function PlaceLinks({ place, onShowOnMap }: { place: Place; onShowOnMap?:
       </a>
       {!demo && (
         <a className="btn btn--kakao" href={kakaoPlaceUrl(place)} target="_blank" rel="noreferrer">
-          카카오맵
+          카카오맵 <span className="btn__sub">메뉴·사진</span>
         </a>
       )}
       <a className="btn" href={directionsUrl(place)} target="_blank" rel="noreferrer">
@@ -77,104 +72,85 @@ export function PlaceLinks({ place, onShowOnMap }: { place: Place; onShowOnMap?:
   );
 }
 
-export function PlaceCard({ place, ctx, highlighted, onShowOnMap, menus, upload }: Props) {
-  const cat = CATEGORY_BY_KEY[place.category];
-  const ai = place.ai;
-  const g = place.google;
+/** 블로그 리뷰 수 */
+export function BlogCount({ place }: { place: Place }) {
+  const n = place.naver;
+  if (!n) return null;
+  if (n.ambiguous) return <span className="muted">블로그 리뷰 집계 어려움 (흔한 이름)</span>;
   return (
-    <article id={`place-${place.id}`} className={`card${highlighted ? " card--hl" : ""}`}>
+    <span title={`네이버 블로그 「${n.query}」 중 이 가게 이야기로 보이는 글`}>
+      블로그 리뷰 <b>{fmt.format(n.blogTotal)}</b>
+      {n.recentPosts > 0 && <span className="muted"> · 최근 30일 {n.recentPosts}</span>}
+    </span>
+  );
+}
+
+interface Props {
+  place: Place;
+  ctx: Ctx;
+  highlighted?: boolean;
+  onOpen: (id: string) => void;
+}
+
+/**
+ * 목록 카드: 분류 · 상호 · 새 소식 · 블로그 리뷰 수 · 다녀오는 시간 · 최근 블로그 리뷰만.
+ * 나머지(영업시간 · 메뉴 · 지도 링크 · 실시간 확인)는 눌렀을 때 상세 팝업에서.
+ */
+export function PlaceCard({ place, ctx, highlighted, onOpen }: Props) {
+  const cat = CATEGORY_BY_KEY[place.category];
+  const t = estimateLunchTime(place);
+  const posts = place.naver?.posts.slice(0, 2) ?? [];
+  const open = () => onOpen(place.id);
+  return (
+    <article
+      id={`place-${place.id}`}
+      className={`card${highlighted ? " card--hl" : ""}${place.lunch === "closed" ? " card--closed" : ""}`}
+      role="button"
+      tabIndex={0}
+      aria-label={`${place.name} 자세히 보기`}
+      onClick={open}
+      onKeyDown={(e) => {
+        if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
+          e.preventDefault();
+          open();
+        }
+      }}
+    >
       <header className="card__top">
         <span className="card__cat" style={{ "--cat": cat.color } as React.CSSProperties}>
-          {cat.emoji} {place.categoryPath || cat.label}
+          {cat.emoji} {place.categoryPath.split(" > ").slice(-1)[0] || cat.label}
         </span>
-        <span className="card__walk">
-          🚶 {place.walkMin}분 · {fmt.format(place.distance)}m
+        <span className="card__trip" title={`왕복 걷기 ${t.walk}분 + 식사 ${t.meal}분 + 웨이팅 ${t.wait}분`}>
+          ⏱ 다녀오기 {t.total}분
         </span>
       </header>
 
-      <ClosureNotice place={place} ctx={ctx} />
-      <p className="card__book">《{bookTitleOf(place)}》</p>
       <h3 className="card__name">{place.name}</h3>
-      <Badges place={place} ctx={ctx} />
+      <Badges place={place} ctx={ctx} withClosure />
 
-      {ai?.summary && <p className="card__summary">“{ai.summary}”</p>}
-      {ai?.signatureMenus.length ? (
-        <p className="card__menus">
-          <span className="muted">대표 메뉴</span> {ai.signatureMenus.join(" · ")}
-        </p>
-      ) : null}
+      <p className="card__meta">
+        <BlogCount place={place} />
+        <span className="muted">
+          🚶 도보 {place.walkMin}분 · {fmt.format(place.distance)}m
+        </span>
+      </p>
 
-      <dl className="stats">
-        {g?.rating != null && (
-          <div className="stat" title="Google 지도 평점">
-            <dt>Google</dt>
-            <dd>
-              ★ {g.rating.toFixed(1)}
-              {g.ratingCount != null && <span className="muted"> ({fmt.format(g.ratingCount)})</span>}
-            </dd>
-          </div>
-        )}
-        {place.naver?.ambiguous && (
-          <div className="stat" title="가게 이름이 흔한 낱말이라 블로그 글 수를 정확히 셀 수 없어요">
-            <dt>블로그 리뷰</dt>
-            <dd className="muted">이름이 흔해 집계 어려움</dd>
-          </div>
-        )}
-        {place.naver && !place.naver.ambiguous && (
-          <div className="stat" title={`네이버 블로그 검색 「${place.naver.query}」 결과 중 이 가게 이야기로 보이는 글 비율로 보정한 수`}>
-            <dt>블로그 리뷰</dt>
-            <dd>
-              {fmt.format(place.naver.blogTotal)}
-              {place.naver.recentPosts > 0 && <span className="muted"> · 최근 30일 {place.naver.recentPosts}</span>}
-            </dd>
-          </div>
-        )}
-        {ai?.priceHint && (
-          <div className="stat">
-            <dt>점심 가격</dt>
-            <dd>{ai.priceHint}</dd>
-          </div>
-        )}
-      </dl>
-
-      <PlaceSignals place={place} />
-      <LunchLine place={place} />
-      <HoursLine place={place} ctx={ctx} />
-      {ai?.lunchNote && place.lunchReason !== ai.lunchNote && <p className="card__note">💡 {ai.lunchNote}</p>}
-      <WebInfoBox place={place} />
-      <MenuReports
-        place={place}
-        reports={menus}
-        branch={upload?.branch ?? ""}
-        canUpload={Boolean(upload) && !place.id.startsWith("demo-")}
-        onUploaded={() => upload?.onDone()}
-      />
-
-      {ai?.tags.length ? (
-        <ul className="tags">
-          {ai.tags.map((t) => (
-            <li key={t}>#{t}</li>
+      {posts.length > 0 && (
+        <ul className="card__reviews" aria-label="최근 블로그 리뷰">
+          {posts.map((p) => (
+            <li key={p.link}>
+              <a href={p.link} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>
+                {p.title}
+              </a>
+              {p.date && <span className="muted">{p.date.slice(2).replaceAll("-", ".")}</span>}
+            </li>
           ))}
         </ul>
-      ) : null}
+      )}
 
-      {place.naver?.posts.length ? (
-        <details className="posts">
-          <summary>최근 블로그 리뷰</summary>
-          <ul>
-            {place.naver.posts.map((p) => (
-              <li key={p.link}>
-                <a href={p.link} target="_blank" rel="noreferrer">
-                  {p.title}
-                </a>
-                {p.date && <span className="muted"> · {p.date.slice(5).replace("-", "/")}</span>}
-              </li>
-            ))}
-          </ul>
-        </details>
-      ) : null}
-
-      <PlaceLinks place={place} onShowOnMap={onShowOnMap} />
+      <span className="card__more" aria-hidden>
+        영업시간 · 메뉴 · 지도 자세히 ›
+      </span>
     </article>
   );
 }

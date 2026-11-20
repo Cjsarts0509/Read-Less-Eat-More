@@ -1,4 +1,4 @@
-import { activeBadges, isLunchFriendly, isNewlyListed } from "../../shared/insights";
+import { isLunchFriendly, isNewlyListed, placeBadges } from "../../shared/insights";
 import { estimateLunchTime } from "../../shared/time";
 import type { BadgeType, CategoryKey, Place } from "../../shared/types";
 
@@ -38,7 +38,7 @@ export interface Ctx {
 }
 
 export function badgesOf(p: Place, ctx: Ctx) {
-  return activeBadges(p.ai?.badges, ctx.today);
+  return placeBadges(p, ctx.today);
 }
 
 export function newsScore(p: Place, ctx: Ctx): number {

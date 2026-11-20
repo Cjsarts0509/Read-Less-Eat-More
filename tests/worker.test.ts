@@ -1,8 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Place } from "../shared/types";
 import { describeCandidate } from "../worker/candidates";
 import { cleanPrefs, defaultDeadline, newRoomCode } from "../worker/rooms";
 import { ruleLine } from "../worker/weather";
+import { handlePlaceLive } from "../worker/live";
+import type { Env } from "../worker/env";
 
 describe("투표방", () => {
   it("방 코드는 헷갈리는 글자 없이 6자리", () => {
@@ -67,5 +69,75 @@ describe("날씨 문구 (AI 없을 때)", () => {
   it("분위기마다 다른 문구", () => {
     expect(ruleLine("rain", { tmin: 3, tmax: 8, sky: 4, pty: 1, pop: 70 })).toContain("비 소식 70%");
     expect(ruleLine("hot", { tmin: 25, tmax: 33, sky: 1, pty: 0, pop: 0 })).toContain("최고 33℃");
+  });
+});
+
+describe("상세 화면 실시간 확인", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  const place = { id: "123", name: "삼정모밀 상암점", address: "서울 마포구 월드컵북로54길 25", categoryPath: "일식" };
+  const env = (over: Partial<Env> = {}): Env =>
+    ({
+      ASSETS: {
+        fetch: async () =>
+          new Response(JSON.stringify({ branch: "HO1", places: [place] }), { headers: { "content-type": "application/json" } }),
+      },
+      ANTHROPIC_API_KEY: "k",
+      SUPABASE_URL: "https://x.supabase.co",
+      SUPABASE_SECRET_KEY: "sb_secret_x",
+      LIVE_LOOKUP_DAILY: "2",
+      ...over,
+    }) as unknown as Env;
+
+  /** Supabase REST 흉내: 가게 줄 · 오늘 확인 수 · 저장 기록 */
+  function supabase(row: unknown | null, todayCount: number) {
+    const writes: Array<{ status: string }> = [];
+    vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+      if (init?.method === "POST") {
+        writes.push(...(JSON.parse(String(init.body)) as Array<{ status: string }>));
+        return new Response(null, { status: 201 });
+      }
+      if (url.includes("place_id=eq.")) return new Response(JSON.stringify(row ? [row] : []));
+      return new Response(JSON.stringify(Array.from({ length: todayCount }, (_, i) => ({ place_id: String(i) }))));
+    });
+    return writes;
+  }
+  const req = new Request("https://lunch.example/api/place-live?b=HO1&id=123");
+
+  it("최근 확인 결과가 있으면 다시 찾지 않는다", async () => {
+    supabase({ place_id: "123", status: "done", data: { hours: "10:00-16:00", sources: [], checkedAt: "2026-11-20" }, checked_at: new Date().toISOString() }, 0);
+    let called = 0;
+    const res = await handlePlaceLive(req, env(), async () => (called++, null));
+    const body = (await res.json()) as { status: string; hours: { open: string } | null };
+    expect(body.status).toBe("cached");
+    expect(body.hours?.open).toBe("10:00");
+    expect(called).toBe(0);
+  });
+
+  it("없으면 AI 웹 검색으로 찾고 저장한다", async () => {
+    const writes = supabase(null, 0);
+    const res = await handlePlaceLive(req, env(), async (p) => ({
+      summary: p.name,
+      openedOn: null,
+      hours: "11:00-21:00",
+      closedDays: "일요일",
+      lunch: "yes",
+      closure: "open",
+      menus: ["판모밀"],
+      sources: [],
+      checkedAt: "2026-11-20",
+    }));
+    const body = (await res.json()) as { status: string; hours: { close: string; closedDays: string } };
+    expect(body.status).toBe("fresh");
+    expect(body.hours).toMatchObject({ close: "21:00", closedDays: "일요일" });
+    expect(writes.map((w) => w.status)).toEqual(["pending", "done"]);
+  });
+
+  it("오늘 한도를 다 쓰면 찾지 않는다", async () => {
+    supabase(null, 2);
+    let called = 0;
+    const res = await handlePlaceLive(req, env(), async () => (called++, null));
+    expect(((await res.json()) as { status: string }).status).toBe("limit");
+    expect(called).toBe(0);
   });
 });

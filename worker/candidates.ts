@@ -1,4 +1,4 @@
-import { activeBadges, adRatioOf, BADGE_META, closureOf, CLOSURE_LABEL, isLunchFriendly, LUNCH_LABEL } from "../shared/insights";
+import { adRatioOf, placeBadges, BADGE_META, closureOf, CLOSURE_LABEL, isLunchFriendly, LUNCH_LABEL } from "../shared/insights";
 import { estimateLunchTime } from "../shared/time";
 import type { Place } from "../shared/types";
 
@@ -11,7 +11,7 @@ export function describeCandidate(p: Place, today: string): string {
   if (p.ai?.priceHint) parts.push(`가격: ${p.ai.priceHint}`);
   if (p.ai?.tags.length) parts.push(`태그: ${p.ai.tags.join(", ")}`);
   if (p.ai?.waiting && p.ai.waiting.level !== "unknown") parts.push(`웨이팅: ${p.ai.waiting.level}${p.ai.waiting.bestTime ? ` (${p.ai.waiting.bestTime})` : ""}`);
-  const news = activeBadges(p.ai?.badges, today);
+  const news = placeBadges(p, today);
   if (news.length) parts.push(`새 소식: ${news.map((b) => `${BADGE_META[b.type].label}(${b.label})`).join(", ")}`);
   const closure = closureOf(p, today);
   if (closure) parts.push(`주의: ${CLOSURE_LABEL[closure.state]}`);

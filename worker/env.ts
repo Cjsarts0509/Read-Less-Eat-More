@@ -10,6 +10,10 @@ export interface Env {
   SUPABASE_SECRET_KEY?: string;
   /** wrangler.jsonc 의 ratelimits 바인딩 (없으면 제한 없이 동작) */
   AI_LIMITER?: RateLimit;
+  /** 상세 화면 실시간 확인(AI 웹 검색) 하루 최대 횟수 (기본 20) */
+  LIVE_LOOKUP_DAILY?: string;
+  /** 실시간 확인에 쓸 모델 (없으면 CLAUDE_MODEL) */
+  WEB_MODEL?: string;
 }
 
 export const DEFAULT_MODEL = "claude-opus-5-5";

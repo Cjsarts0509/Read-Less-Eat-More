@@ -184,3 +184,36 @@ describe("AI 웹 조사 결과", () => {
     expect(webSearchToolType("claude-haiku-5-5")).toBe("web_search_20250305");
   });
 });
+
+describe("블로그 낱말로 찾는 새 소식", () => {
+  const today = "2026-11-20";
+  it("종류마다 가장 최근 글 하나, 기간이 지난 글은 버린다", async () => {
+    const { keywordBadges } = await import("../shared/insights");
+    const badges = keywordBadges(
+      [
+        { title: "상암 새로 생긴 국밥집 그랜드 오픈 기념 수육 증정", date: "2026-11-10", link: "a" },
+        { title: "굴국밥 개시! 겨울 한정", date: "2026-11-15", link: "b" },
+        { title: "직장인 점심 특선 9,900원", date: "2026-06-01", link: "c" },
+        { title: "오픈 시간 맞춰 갔어요", date: "2026-11-18", link: "d" },
+        { title: "작년 오픈 이벤트", date: "2025-01-01", link: "e" },
+      ],
+      today,
+    );
+    const byType = Object.fromEntries(badges.map((b) => [b.type, b]));
+    expect(byType.new_open).toMatchObject({ label: "11월 오픈 소식", evidenceDate: "2026-11-10", auto: true, link: "a" });
+    expect(byType.event?.link).toBe("a");
+    expect(byType.seasonal_menu?.link).toBe("b");
+    expect(byType.lunch_special?.link).toBe("c");
+    expect(badges.some((b) => b.link === "d" || b.link === "e")).toBe(false);
+  });
+
+  it("AI 가 찾은 같은 종류의 소식이 있으면 AI 쪽을 쓴다", async () => {
+    const { placeBadges } = await import("../shared/insights");
+    const ai = { badges: [{ type: "event" as const, label: "리뷰 이벤트", detail: "", evidenceDate: today }] } as unknown as Place["ai"];
+    const auto = [
+      { type: "event" as const, label: "이벤트 진행", detail: "", evidenceDate: today, auto: true },
+      { type: "new_menu" as const, label: "신메뉴", detail: "", evidenceDate: today, auto: true },
+    ];
+    expect(placeBadges({ ai, autoBadges: auto }, today).map((b) => b.label)).toEqual(["리뷰 이벤트", "신메뉴"]);
+  });
+});

@@ -15,7 +15,9 @@
     // 비용을 줄이려면 "claude-haiku-5-5" 로 바꾸세요
     "CLAUDE_MODEL": "claude-opus-5-5",
     // 팀 투표방 · 메뉴판 사진 · 날씨(env_forecast) 를 읽고 쓰는 Supabase. 키는 시크릿 SUPABASE_SECRET_KEY 로
-    "SUPABASE_URL": "https://owakkzcksskilgzamvnq.supabase.co"
+    "SUPABASE_URL": "https://owakkzcksskilgzamvnq.supabase.co",
+    // 상세 화면 '실시간 확인'(AI 웹 검색) 하루 최대 횟수. 결과는 Supabase 에 14일 저장해 함께 쓴다
+    "LIVE_LOOKUP_DAILY": "20"
   },
   // AI 호출 남용 방지: IP · 기능마다 1분에 10회
   "ratelimits": [{ "name": "AI_LIMITER", "namespace_id": "1001", "simple": { "limit": 10, "period": 60 } }],

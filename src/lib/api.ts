@@ -1,8 +1,8 @@
 /** Worker API 호출 모음 */
-import type { MenuReport, WeatherResponse } from "../../shared/api";
+import type { MenuReport, PlaceLiveResponse, WeatherResponse } from "../../shared/api";
 import { readStore, writeStore } from "./storage";
 
-export type { MenuReport, WeatherResponse };
+export type { MenuReport, PlaceLiveResponse, WeatherResponse };
 
 async function call<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
@@ -34,6 +34,11 @@ export interface ChatReply {
 }
 export function sendChat(body: { branch: string; ids: string[]; messages: ChatMessage[]; context: { weather?: string; timeBudget?: number } }) {
   return post<ChatReply>("/api/chat", body);
+}
+
+/** 상세 화면 실시간 확인: 영업시간 · 메뉴 (AI 웹 검색, 여러 사람이 함께 쓰는 캐시) */
+export function fetchPlaceLive(branch: string, placeId: string): Promise<PlaceLiveResponse> {
+  return call<PlaceLiveResponse>(`/api/place-live?b=${encodeURIComponent(branch)}&id=${encodeURIComponent(placeId)}`);
 }
 
 /* ---------- 투표방 ---------- */

@@ -28,6 +28,63 @@ export function activeBadges(badges: Badge[] | undefined, today: string): Badge[
   });
 }
 
+/** 가게의 새 소식: AI 가 찾은 것 + 블로그 낱말로 찾은 것 (같은 종류면 AI 우선) */
+export function placeBadges(place: Pick<Place, "ai" | "autoBadges">, today: string): Badge[] {
+  const ai = activeBadges(place.ai?.badges, today);
+  const auto = activeBadges(place.autoBadges, today).filter((b) => !ai.some((a) => a.type === b.type));
+  return [...ai, ...auto];
+}
+
+const KEYWORD_RULES: Array<{ type: BadgeType; re: RegExp; not?: RegExp; label: (m: RegExpMatchArray, date: string) => string }> = [
+  {
+    type: "new_open",
+    re: /(신규|그랜드|정식|가)\s*오픈|새로\s*(생긴|오픈|문\s*연)|오픈\s*(기념|소식|첫날|이벤트)|오픈한\s*지\s*(얼마|몇|한\s*달|\d+\s*(일|주|개월))|신장\s*개업|개업\s*(했|기념|소식)|new\s*open/i,
+    not: /오픈\s*(시간|런|하자마자|맞춰|직후|시각)/,
+    label: (_m, date) => `${Number(date.slice(5, 7))}월 오픈 소식`,
+  },
+  { type: "event", re: /이벤트|증정|사은품|경품|쿠폰\s*(증정|지급|이벤트)/, not: /이벤트\s*홀/, label: () => "이벤트 진행" },
+  { type: "discount", re: /할인\s*(행사|이벤트|중)|\d+\s*%\s*(할인|off)|반값|1\s*\+\s*1|가격\s*인하/i, label: () => "할인 소식" },
+  {
+    type: "seasonal_menu",
+    re: /(겨울|여름|봄|가을|시즌|기간|계절)\s*한정|한정\s*(메뉴|판매)|시즌\s*메뉴|(굴|매생이|콩국수|냉면|팥빙수|빙수|딸기|대방어|방어|꼬막|과메기)\s*(개시|시작|출시|시즌)/,
+    label: (m) => (m[3] ? `${m[3]} ${m[4]}` : "시즌 한정"),
+  },
+  { type: "new_menu", re: /신메뉴|새\s*메뉴|신상\s*메뉴|메뉴\s*출시/, label: () => "신메뉴" },
+  {
+    type: "lunch_special",
+    re: /점심\s*특선|런치\s*(세트|메뉴|특선|코스|스페셜)|점심\s*(세트|정식|한정)|직장인\s*(점심|메뉴|세트)/,
+    label: () => "점심 특선",
+  },
+];
+
+/**
+ * 블로그 글 제목 · 요약에서 새 소식 낱말을 찾는다 (AI 분석이 닿기 전에도 새 소식을 보여 주려고).
+ * 종류마다 가장 최근 글 하나만, 기간이 지난 글은 버린다.
+ */
+export function keywordBadges(posts: Array<{ title: string; snippet?: string; date: string | null; link?: string }>, today: string): Badge[] {
+  const out: Badge[] = [];
+  const sorted = [...posts].filter((p) => p.date).sort((a, b) => b.date!.localeCompare(a.date!));
+  for (const rule of KEYWORD_RULES) {
+    for (const post of sorted) {
+      const age = daysBetween(post.date!, today);
+      if (age < -1 || age > BADGE_META[rule.type].maxAgeDays) continue;
+      const text = `${post.title} ${post.snippet ?? ""}`;
+      const m = text.match(rule.re);
+      if (!m || rule.not?.test(text)) continue;
+      out.push({
+        type: rule.type,
+        label: rule.label(m, post.date!),
+        detail: post.title.length > 40 ? `${post.title.slice(0, 39)}…` : post.title,
+        evidenceDate: post.date,
+        auto: true,
+        link: post.link,
+      });
+      break;
+    }
+  }
+  return out;
+}
+
 /** 파이프라인이 처음 본 날이 기준일 이후이고 60일 안이면 '지도 신규 등록' */
 export function isNewlyListed(place: Pick<Place, "firstSeen">, baselineDate: string | null, today: string): boolean {
   if (!baselineDate) return false;

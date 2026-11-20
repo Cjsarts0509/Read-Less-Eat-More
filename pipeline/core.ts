@@ -7,7 +7,16 @@
 import { categorize } from "../shared/categories";
 import { haversine, walkMinutes } from "../shared/geo";
 import { pickHours } from "../shared/hours";
-import { computeLunch, computePriceChange, daysBetween, isDeliveryOnly, mergePriceHistory, resolveHours, SPONSORED_RE } from "../shared/insights";
+import {
+  computeLunch,
+  computePriceChange,
+  daysBetween,
+  isDeliveryOnly,
+  keywordBadges,
+  mergePriceHistory,
+  resolveHours,
+  SPONSORED_RE,
+} from "../shared/insights";
 import type { Branch, BranchPlaces, GoogleInfo, Place, WebInfo } from "../shared/types";
 import { mapLimit } from "./http";
 import type { KakaoPlace } from "./sources/kakao";
@@ -128,6 +137,7 @@ export function toPlace(doc: KakaoPlace, branch: Branch, prev: Place | undefined
     hours: prev?.hours ?? null,
     hoursCheckedAt: prev?.hoursCheckedAt,
     aiPending: prev?.aiPending || undefined,
+    autoBadges: prev?.autoBadges,
   };
 }
 
@@ -229,6 +239,9 @@ export async function collectBranch(
           query: q.query,
           checkedAt: today,
         };
+        // AI 분석 전에도 새 소식이 보이도록 글 제목 · 요약의 낱말로 먼저 찾아 둔다
+        const auto = keywordBadges(relevant, today);
+        p.autoBadges = auto.length ? auto : undefined;
         // 첫 형식(가게와 무관한 글까지 읽음)으로 분석한 AI 결과는 다시 분석한다
         if (hadOldFormat) p.ai = null;
         // AI 에는 최근 글 10개를 넘긴다 (새 소식 · 이벤트는 최신 글에 있다)
@@ -316,10 +329,11 @@ export async function collectBranch(
     places = places.filter((p) => p.google?.businessStatus !== "CLOSED_PERMANENTLY");
   }
 
-  // 4) Claude: 새 소식이 있는 곳만 분석 (인기순)
+  // 4) Claude: 새 소식이 있는 곳만 분석 (걸어갈 만한 곳 → 인기순)
+  const near = (p: Place) => (p.walkMin <= 10 ? 0 : 1);
   const candidates = places
     .filter((p) => needsAnalysis(p, freshPosts.get(p.id) ?? [], today))
-    .sort((a, b) => popularity(b) - popularity(a));
+    .sort((a, b) => near(a) - near(b) || popularity(b) - popularity(a));
   for (const p of places) if (!candidates.includes(p) && freshPosts.has(p.id)) p.aiPending = undefined;
 
   if (deps.analyzer && candidates.length) {
