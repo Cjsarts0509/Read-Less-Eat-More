@@ -69,7 +69,7 @@ describe("네이버 검색어", () => {
     expect(areaHint("서울 종로구 종로1가 24", "")).toBe("종로1가");
     expect(areaHint("서울 강남구 역삼동 823-1", "")).toBe("역삼동");
     expect(areaHint("", "서울 서초구 강남대로 465")).toBe("서초구");
-    expect(buildQuery("본죽 광화문점", "서울 종로구 종로1가 24", "")).toBe("본죽 광화문점 종로1가");
+    expect(buildQuery("본죽 광화문점", "서울 종로구 종로1가 24", "")).toBe('"본죽" 종로1가');
   });
 
   it("HTML 태그와 엔티티를 지운다", () => {
@@ -157,7 +157,14 @@ describe("collectBranch", () => {
       ],
       naver: async (q) => ({
         total: q.includes("가까운") ? 120 : 5,
-        posts: [{ title: "그랜드 오픈 후기", link: `https://blog/${q}`, date: "2026-11-15", snippet: "오픈 기념 이벤트" }],
+        posts: [
+          {
+            title: `${q.match(/"(.+?)"/)?.[1] ?? q} 그랜드 오픈 후기`,
+            link: `https://blog/${q}`,
+            date: "2026-11-15",
+            snippet: "오픈 기념 이벤트",
+          },
+        ],
       }),
       google: null,
       analyzer,
@@ -172,7 +179,7 @@ describe("collectBranch", () => {
     expect(data.places.map((p) => p.id)).toEqual(["a", "c"]);
     const a = data.places[0]!;
     expect(a.naver?.blogTotal).toBe(120);
-    expect(a.naver?.query).toBe("가까운 국밥 종로1가");
+    expect(a.naver?.query).toBe('"가까운 국밥" 종로1가');
     expect(a.ai?.summary).toBe("가까운 국밥 요약");
     expect(a.ai?.bookTitle).toBe("국밥의 고독");
     expect(a.ai?.adRatio).toBe(1); // 글 1개 중 협찬 1개
@@ -373,5 +380,54 @@ describe("네이버 검색 API (NAVER API HUB 이전)", () => {
   it("total 이 없는 응답이면 받은 글 수", async () => {
     const { parseBlogResponse } = await import("../pipeline/sources/naver");
     expect(parseBlogResponse({ items: [{ title: "a", link: "l", description: "", bloggername: "", postdate: "20261101" }] }).total).toBe(1);
+  });
+});
+
+describe("블로그 글 관련성 (흔한 이름의 부풀려진 검색 수 거르기)", () => {
+  it("지점 접미사를 떼고 따옴표로 묶는다", async () => {
+    const { blogQuery, coreName } = await import("../pipeline/sources/naver");
+    expect(coreName("냉면쟁이고기꾼 서울마포상암점")).toBe("냉면쟁이고기꾼");
+    expect(coreName("한")).toBe("한");
+    expect(blogQuery("죽이요 상암동점", "서울 마포구 상암동 1600", "").query).toBe('"죽이요" 상암동');
+  });
+
+  it("두 글자 이하 이름은 동네 이름도 함께 나와야 관련 글", async () => {
+    const { blogQuery, isRelevantPost } = await import("../pipeline/sources/naver");
+    const q = blogQuery("오늘", "서울 마포구 상암동 1600", "");
+    expect(isRelevantPost({ title: "오늘 날씨 좋다", snippet: "산책" }, q)).toBe(false);
+    expect(isRelevantPost({ title: "상암동 점심 오늘 후기", snippet: "" }, q)).toBe(true);
+    const q2 = blogQuery("백채김치찌개 상암점", "서울 마포구 상암동 1600", "");
+    expect(isRelevantPost({ title: "백채 김치찌개 점심", snippet: "" }, q2)).toBe(true);
+    expect(isRelevantPost({ title: "김치찌개 맛집", snippet: "" }, q2)).toBe(false);
+  });
+
+  it("검색 결과 수를 관련 글 비율만큼 줄이고, 무관한 글은 AI 에 넘기지 않는다", async () => {
+    const seenByAi: number[] = [];
+    const deps: Deps = {
+      today: "2026-11-20",
+      nowIso: "2026-11-20T00:00:00.000Z",
+      kakao: async () => [kakaoDoc("x", "오늘", 0.001)],
+      naver: async () => ({
+        total: 300000,
+        posts: [
+          { title: "오늘 하루", link: "1", date: "2026-11-19", snippet: "일상" },
+          { title: "종로1가 오늘 점심", link: "2", date: "2026-11-18", snippet: "백반" },
+        ],
+      }),
+      google: null,
+      analyzer: {
+        model: "m",
+        async analyze(_t, places) {
+          seenByAi.push(places[0]!.posts.length);
+          return new Map();
+        },
+      },
+    };
+    const { data } = await collectBranch(branch, null, DEFAULT_CONFIG, deps, { naver: 10, google: 0, ai: 10 });
+    const n = data.places[0]!.naver!;
+    expect(n.rawTotal).toBe(300000);
+    expect(n.relevance).toBe(0.5);
+    expect(n.blogTotal).toBe(150000);
+    expect(seenByAi).toEqual([1]);
   });
 });

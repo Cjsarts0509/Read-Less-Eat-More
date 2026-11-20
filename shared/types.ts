@@ -70,6 +70,10 @@ export interface NaverInfo {
   blogTotal: number;
   /** 최신 글 중 협찬 · 체험단 표현이 보이는 글 수 (키워드 기준) */
   sponsoredHint?: number;
+  /** 검색 결과 수 (가게와 무관한 글 포함, 참고용) */
+  rawTotal?: number;
+  /** 최신 글 중 이 가게 이야기로 보이는 글 비율 0~1. blogTotal 은 rawTotal × 이 비율 */
+  relevance?: number;
   /** 최근 30일 안에 올라온 글 수 (최신 10개 기준) */
   recentPosts: number;
   latestPostDate: string | null;

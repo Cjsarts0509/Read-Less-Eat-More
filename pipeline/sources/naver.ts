@@ -82,9 +82,47 @@ export function areaHint(jibunAddress: string, roadAddress: string): string {
   return tokens.find((t) => /(구|군)$/.test(t)) ?? tokens.find((t) => /시$/.test(t)) ?? "";
 }
 
-export function buildQuery(name: string, jibunAddress: string, roadAddress: string): string {
+/** 지점 접미사를 뗀 가게 이름. "본죽 광화문점" → "본죽", "냉면쟁이고기꾼 서울마포상암점" → "냉면쟁이고기꾼" */
+export function coreName(name: string): string {
+  const tokens = name.trim().split(/\s+/);
+  if (tokens.length >= 2 && /(점|지점|본점|호점)$/.test(tokens.at(-1)!)) tokens.pop();
+  return tokens.join(" ");
+}
+
+export interface BlogQuery {
+  query: string;
+  core: string;
+  hint: string;
+  gu: string;
+}
+
+/** 블로그 검색어: 따옴표로 묶은 가게 이름 + 동네 */
+export function blogQuery(name: string, jibunAddress: string, roadAddress: string): BlogQuery {
+  const core = coreName(name);
   const hint = areaHint(jibunAddress, roadAddress);
-  return hint && !name.includes(hint) ? `${name} ${hint}` : name;
+  const tokens = (jibunAddress || roadAddress).split(/\s+/).slice(1);
+  const gu = tokens.find((t) => /(구|군)$/.test(t)) ?? tokens.find((t) => /시$/.test(t)) ?? "";
+  const query = hint && !core.includes(hint) ? `"${core}" ${hint}` : `"${core}"`;
+  return { query, core, hint, gu };
+}
+
+/** 검색어 문자열만 */
+export function buildQuery(name: string, jibunAddress: string, roadAddress: string): string {
+  return blogQuery(name, jibunAddress, roadAddress).query;
+}
+
+const squash = (s: string) => s.replace(/\s+/g, "").toLowerCase();
+
+/**
+ * 이 가게 이야기로 보이는 글인가: 본문에 가게 이름이 들어 있어야 하고,
+ * 이름이 두 글자 이하로 흔한 단어일 수 있으면 동네(동 · 구) 이름도 함께 나와야 한다.
+ */
+export function isRelevantPost(post: { title: string; snippet: string }, q: Pick<BlogQuery, "core" | "hint" | "gu">): boolean {
+  const text = squash(`${post.title} ${post.snippet}`);
+  if (!text.includes(squash(q.core))) return false;
+  if (squash(q.core).length > 2) return true;
+  const area = [q.hint, q.hint.replace(/(동|가)$/, ""), q.gu, q.gu.replace(/(구|군|시)$/, "")].filter((a) => a.length >= 2);
+  return area.some((a) => text.includes(squash(a)));
 }
 
 export async function searchBlog(

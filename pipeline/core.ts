@@ -11,7 +11,7 @@ import type { Branch, BranchPlaces, GoogleInfo, Place, WebInfo } from "../shared
 import { mapLimit } from "./http";
 import type { KakaoPlace } from "./sources/kakao";
 import type { BlogSearchResult } from "./sources/naver";
-import { buildQuery } from "./sources/naver";
+import { blogQuery, isRelevantPost } from "./sources/naver";
 import type { Analyzer, InsightInput } from "./sources/claude";
 
 export interface CollectConfig {
@@ -142,7 +142,10 @@ export async function collectBranch(
   if (deps.naver) {
     const naver = deps.naver;
     const stale = places
-      .filter((p) => p.aiPending || !p.naver || daysBetween(p.naver.checkedAt, today) >= cfg.naverRefreshDays)
+      // relevance 가 없는 예전 형식(가게와 무관한 글까지 센 값)도 다시 조회
+      .filter(
+        (p) => p.aiPending || !p.naver || p.naver.relevance === undefined || daysBetween(p.naver.checkedAt, today) >= cfg.naverRefreshDays,
+      )
       .sort((a, b) => {
         const pa = a.aiPending ? 0 : 1;
         const pb = b.aiPending ? 0 : 1;
@@ -151,21 +154,29 @@ export async function collectBranch(
     const targets = stale.slice(0, Math.max(0, budget.naver));
     budget.naver -= targets.length;
     await mapLimit(targets, 4, async (p) => {
-      const query = buildQuery(p.name, docs.find((d) => d.id === p.id)?.address_name ?? "", p.address);
+      const q = blogQuery(p.name, docs.find((d) => d.id === p.id)?.address_name ?? "", p.address);
       try {
         stats.naverCalls++;
-        const res = await naver(query);
-        const recent = res.posts.filter((post) => post.date && daysBetween(post.date, today) <= 30).length;
+        const res = await naver(q.query);
+        // 이름이 흔한 단어면 무관한 글이 섞인다 → 이 가게 이야기인 글만 쓰고, 검색 결과 수도 그 비율만큼 줄인다
+        const relevant = res.posts.filter((post) => isRelevantPost(post, q));
+        const relevance = res.posts.length ? relevant.length / res.posts.length : 0;
+        const recent = relevant.filter((post) => post.date && daysBetween(post.date, today) <= 30).length;
+        const hadOldFormat = p.naver !== null && p.naver.relevance === undefined;
         p.naver = {
-          blogTotal: res.total,
-          sponsoredHint: res.posts.filter((post) => SPONSORED_RE.test(`${post.title} ${post.snippet}`)).length,
+          blogTotal: Math.round(res.total * relevance),
+          rawTotal: res.total,
+          relevance: Math.round(relevance * 100) / 100,
+          sponsoredHint: relevant.filter((post) => SPONSORED_RE.test(`${post.title} ${post.snippet}`)).length,
           recentPosts: recent,
-          latestPostDate: res.posts.find((post) => post.date)?.date ?? null,
-          posts: res.posts.slice(0, 3).map(({ title, link, date }) => ({ title, link, date })),
-          query,
+          latestPostDate: relevant.find((post) => post.date)?.date ?? null,
+          posts: relevant.slice(0, 3).map(({ title, link, date }) => ({ title, link, date })),
+          query: q.query,
           checkedAt: today,
         };
-        freshPosts.set(p.id, res.posts);
+        // 예전 형식으로 분석한 AI 결과는 무관한 글을 읽었을 수 있어 다시 분석한다
+        if (hadOldFormat) p.ai = null;
+        freshPosts.set(p.id, relevant);
       } catch (err) {
         stats.errors++;
         log(`  네이버 실패 ${p.name}: ${(err as Error).message}`);
