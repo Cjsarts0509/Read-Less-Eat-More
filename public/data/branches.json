@@ -369,9 +369,9 @@
     "division": "본사",
     "region": "서울",
     "address": "서울특별시 마포구 월드컵북로54길 25, 상암DMC푸르지오시티(S-City)",
-    "lat": 37.5786,
-    "lng": 126.8878,
-    "coordSource": "approx"
+    "lat": 37.5820722649396,
+    "lng": 126.888968674041,
+    "coordSource": "kakao"
   },
   {
     "code": "HO2",
@@ -380,9 +380,9 @@
     "division": "본사",
     "region": "경기",
     "address": "경기도 파주시 문발로 249, 교보문고",
-    "lat": 37.7128,
-    "lng": 126.6854,
-    "coordSource": "approx"
+    "lat": 37.7162912972645,
+    "lng": 126.687947131539,
+    "coordSource": "kakao"
   },
   {
     "code": "034",

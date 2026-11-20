@@ -1,5 +1,10 @@
 {
-  "generatedAt": null,
-  "baselineDate": null,
-  "branches": {}
+  "generatedAt": "2026-11-20T11:16:10.482Z",
+  "baselineDate": "2026-11-20",
+  "branches": {
+    "HO1": {
+      "updatedAt": "2026-11-20T11:16:10.482Z",
+      "count": 400
+    }
+  }
 }
