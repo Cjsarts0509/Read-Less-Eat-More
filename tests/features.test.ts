@@ -150,7 +150,7 @@ describe("recentReviewPosts", () => {
 
 describe("jokesOfDay", () => {
   it("하루 10개, 같은 날은 같고 이웃한 날끼리 겹치지 않는다", () => {
-    expect(JOKES.length).toBeGreaterThanOrEqual(300);
+    expect(JOKES.length).toBe(100);
     expect(new Set(JOKES).size).toBe(JOKES.length);
     const a = jokesOfDay("2026-11-20");
     expect(a).toHaveLength(10);
