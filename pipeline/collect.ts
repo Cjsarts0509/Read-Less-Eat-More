@@ -11,7 +11,9 @@
  *   GOOGLE_PLACES_API_KEY   선택. 별점 · 영업시간 (GOOGLE_MAX_PER_BRANCH 와 함께)
  *   BRANCHES                쉼표로 지점 코드 제한 (전체)
  *   RADIUS_M (1000) · MAX_PLACES_PER_BRANCH (400) · NAVER_REFRESH_DAYS (3) · NAVER_DAILY_BUDGET (20000)
- *   AI_MAX_PLACES_PER_RUN (300) · AI_BATCH_SIZE (8) · GOOGLE_MAX_PER_BRANCH (0) · GOOGLE_REFRESH_DAYS (30)
+ *   AI_MAX_PLACES_PER_RUN (300) · AI_BATCH_SIZE (8)
+ *   GOOGLE_MAX_PER_BRANCH (키가 있으면 28) · GOOGLE_REFRESH_DAYS (60) · GOOGLE_DAILY_BUDGET (45)
+ *     — 지점 36곳 × 28 ≈ 1,000곳, 하루 45건 × 평일 22일 ≈ 990건으로 Google 무료 한도(월 1,000건) 안
  *   WEB_SEARCH_MAX_PER_RUN (20) — 가까운 가게의 영업시간 · 휴무 · 배달 전용 여부를 Claude 웹 검색으로 조사 (0 이면 끔)
  *   WEB_MODEL               웹 조사에 쓸 모델 (CLAUDE_MODEL 과 같음)
  *   DAUM_DAILY_BUDGET (10000) — 다음 블로그 · 카페 리뷰 검색 (카카오 키, 0 이면 끔)
@@ -68,7 +70,7 @@ async function main() {
     radius: envInt("RADIUS_M", DEFAULT_CONFIG.radius),
     maxPlaces: envInt("MAX_PLACES_PER_BRANCH", DEFAULT_CONFIG.maxPlaces),
     naverRefreshDays: envInt("NAVER_REFRESH_DAYS", DEFAULT_CONFIG.naverRefreshDays),
-    googleMaxPerBranch: googleKey ? envInt("GOOGLE_MAX_PER_BRANCH", 0) : 0,
+    googleMaxPerBranch: googleKey ? envInt("GOOGLE_MAX_PER_BRANCH", 28) : 0,
     googleRefreshDays: envInt("GOOGLE_REFRESH_DAYS", DEFAULT_CONFIG.googleRefreshDays),
     aiBatchSize: Math.max(1, envInt("AI_BATCH_SIZE", DEFAULT_CONFIG.aiBatchSize)),
     driveRadius: envInt("DRIVE_RADIUS_M", DEFAULT_CONFIG.driveRadius),
@@ -150,7 +152,7 @@ async function main() {
 
   const total: Budget = {
     naver: envInt("NAVER_DAILY_BUDGET", 20000),
-    google: envInt("GOOGLE_DAILY_BUDGET", 2000),
+    google: envInt("GOOGLE_DAILY_BUDGET", 45),
     ai: envInt("AI_MAX_PLACES_PER_RUN", 300),
     web: anthropicKey ? envInt("WEB_SEARCH_MAX_PER_RUN", 20) : 0,
     daum: envInt("DAUM_DAILY_BUDGET", 10000),

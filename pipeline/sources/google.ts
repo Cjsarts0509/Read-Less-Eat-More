@@ -2,8 +2,9 @@
  * (선택) Google Places API (New) — 텍스트 검색으로 별점·영업시간·영업 상태를 가져온다.
  * https://developers.google.com/maps/documentation/places/web-service/text-search
  *
- * 별점·영업시간 필드는 Enterprise 요금이 붙으므로 GOOGLE_MAX_PER_BRANCH 로 지점마다
- * 인기 상위 N곳만 조회하고, GOOGLE_REFRESH_DAYS 마다 다시 확인한다.
+ * 별점·영업시간 필드는 Enterprise 요금(월 1,000건 무료)이 붙으므로 GOOGLE_MAX_PER_BRANCH 로 지점마다
+ * 걸어갈 만한 인기 상위 N곳만 조회하고, GOOGLE_REFRESH_DAYS 마다 다시 확인한다.
+ * 매장 식사 · 배달(dineIn · delivery) 필드는 더 비싼 Enterprise + Atmosphere 요금이라 묻지 않는다.
  */
 import { haversine } from "../../shared/geo";
 import { openAtWeekdayLunch } from "../../shared/insights";
@@ -39,8 +40,6 @@ const FIELD_MASK = [
   "places.businessStatus",
   "places.googleMapsUri",
   "places.regularOpeningHours",
-  "places.dineIn",
-  "places.delivery",
 ].join(",");
 
 /** 이름 비교용: 공백·괄호·'점' 접미사를 뺀다 */

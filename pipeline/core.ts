@@ -62,7 +62,7 @@ export const DEFAULT_CONFIG: CollectConfig = {
   maxPlaces: 400,
   naverRefreshDays: 3,
   googleMaxPerBranch: 0,
-  googleRefreshDays: 30,
+  googleRefreshDays: 60,
   aiBatchSize: 8,
   aiConcurrency: 2,
   webMaxBlogTotal: 3,
@@ -402,7 +402,11 @@ export async function collectBranch(
   // 3) Google (선택): 인기 상위 N곳의 별점·영업시간
   if (deps.google && cfg.googleMaxPerBranch > 0) {
     const google = deps.google;
-    const top = [...places].sort((a, b) => popularity(b) - popularity(a)).slice(0, cfg.googleMaxPerBranch);
+    // 걸어갈 만한 곳(도보 10분 안) 중 인기 상위 N곳만 — 무료 한도 안에서 가장 많이 볼 가게부터
+    const top = places
+      .filter((p) => p.distance <= cfg.radius && p.walkMin <= 10 && p.category !== "dessert" && p.category !== "pub")
+      .sort((a, b) => popularity(b) - popularity(a))
+      .slice(0, cfg.googleMaxPerBranch);
     const due = top.filter((p) => !p.google || daysBetween(p.google.checkedAt, today) >= cfg.googleRefreshDays);
     const targets = due.slice(0, Math.max(0, budget.google));
     budget.google -= targets.length;

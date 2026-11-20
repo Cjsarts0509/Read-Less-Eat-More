@@ -91,7 +91,7 @@
 | `NAVER_CLIENT_ID` / `NAVER_CLIENT_SECRET` | 네이버 클라우드(ncloud.com) → **NAVER API HUB** → 애플리케이션 등록 → 검색(블로그) 추가 → 인증 정보의 Client ID · Client Secret. 예전 developers.naver.com 키도 자동으로 시도함 | 권장 | 무료 한도 안 |
 | `ANTHROPIC_API_KEY` | [Claude Console](https://platform.claude.com) → API Keys | 권장 | 아래 '비용' 참고 |
 | `SUPABASE_SECRET_KEY` | Supabase `Cjs0509arts` 프로젝트 → Project Settings → API Keys → **Secret keys** 만들기 (`sb_secret_…`) | 투표방 · 메뉴판 · 날씨에 필요 | 무료 한도 안 |
-| `GOOGLE_PLACES_API_KEY` | Google Cloud → Places API (New) | 선택 | 별점·영업시간 필드는 유료 (월 무료 한도 있음) |
+| `GOOGLE_PLACES_API_KEY` | Google Cloud → Places API (New) | 선택 | 영업시간 · 별점은 Enterprise 요금(월 1,000건 무료). 기본값은 지점마다 도보 10분 안 인기 상위 28곳, 하루 45건, 60일마다 갱신이라 무료 한도 안 |
 
 ### 2. GitHub 에 등록
 

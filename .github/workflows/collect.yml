@@ -60,6 +60,8 @@ jobs:
           RADIUS_M: ${{ vars.RADIUS_M }}
           MAX_PLACES_PER_BRANCH: ${{ vars.MAX_PLACES_PER_BRANCH }}
           GOOGLE_MAX_PER_BRANCH: ${{ vars.GOOGLE_MAX_PER_BRANCH }}
+          GOOGLE_DAILY_BUDGET: ${{ vars.GOOGLE_DAILY_BUDGET }}
+          GOOGLE_REFRESH_DAYS: ${{ vars.GOOGLE_REFRESH_DAYS }}
           AI_MAX_PLACES_PER_RUN: ${{ inputs.ai_budget || vars.AI_MAX_PLACES_PER_RUN }}
           WEB_SEARCH_MAX_PER_RUN: ${{ vars.WEB_SEARCH_MAX_PER_RUN }}
           WEB_MODEL: ${{ vars.WEB_MODEL }}
