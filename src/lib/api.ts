@@ -1,5 +1,5 @@
 /** Worker API 호출 모음 */
-import type { MenuReport, PlaceLiveResponse, ReviewSummary, WeatherResponse } from "../../shared/api";
+import type { BalanceResponse, MenuReport, PlaceLiveResponse, ReviewSummary, WeatherResponse } from "../../shared/api";
 import { readStore, writeStore } from "./storage";
 
 export type { MenuReport, PlaceLiveResponse, ReviewSummary, WeatherResponse };
@@ -82,6 +82,11 @@ export const joinRoom = (code: string, nickname: string, prefs: RoomPrefs) =>
 export const voteRoom = (code: string, placeId: string | null) => post<RoomView>(`/api/rooms/${code}/vote`, { memberKey: memberKey(), placeId });
 export const mediateRoom = (code: string) => post<RoomView>(`/api/rooms/${code}/mediate`, { memberKey: memberKey() });
 export const decideRoom = (code: string) => post<RoomView>(`/api/rooms/${code}/decide`, { memberKey: memberKey() });
+
+/* ---------- 밸런스 게임 ---------- */
+
+export const fetchBalance = () => call<BalanceResponse>(`/api/balance?me=${memberKey()}`);
+export const voteBalance = (choice: "a" | "b") => post<BalanceResponse>("/api/balance", { memberKey: memberKey(), choice });
 
 /* ---------- 사내 한줄평 ---------- */
 

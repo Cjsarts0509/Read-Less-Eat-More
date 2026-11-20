@@ -3694,3 +3694,362 @@ body.modal-open {
   color: var(--ink-60);
   vertical-align: 1px;
 }
+
+/* ---------- 머리: 제목 · 심심풀이 · 오늘의 서가 ---------- */
+
+.hero {
+  padding: 16px 20px;
+}
+
+.hero__grid {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px 24px;
+}
+
+.hero__brand {
+  min-width: 0;
+}
+
+.hero__brand .hero__pills {
+  margin-bottom: 6px;
+}
+
+.hero__brand .hero__title {
+  font-size: clamp(30px, 3.6vw, 46px);
+}
+
+.hero__brand .hero__lead {
+  margin-top: 6px;
+  max-width: 460px;
+  font-size: 13px;
+}
+
+.sound-btn {
+  width: 32px;
+  height: 30px;
+  border: 2px solid var(--ink);
+  border-radius: 8px;
+  background: var(--paper);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.fun {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 2px dashed var(--ink-40);
+  border-radius: 12px;
+  background: rgba(240, 236, 225, 0.55);
+}
+
+.fun__tabs {
+  display: flex;
+  gap: 6px;
+}
+
+.fun__tab {
+  padding: 3px 10px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: var(--paper);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.fun__tab--on {
+  background: var(--ink);
+  color: var(--mustard);
+}
+
+.cookie {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 56px;
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  background: var(--mustard);
+  box-shadow: var(--sh-sm);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.cookie__icon {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.cookie:hover .cookie__icon {
+  animation: wobble 0.5s ease-in-out;
+}
+
+.cookie--crack .cookie__icon {
+  animation: crack 0.65s ease-in both;
+}
+
+@keyframes wobble {
+  25% {
+    transform: rotate(-12deg);
+  }
+  75% {
+    transform: rotate(10deg);
+  }
+}
+
+@keyframes crack {
+  30% {
+    transform: rotate(-18deg) scale(1.1);
+  }
+  60% {
+    transform: rotate(16deg) scale(1.2);
+  }
+  to {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+.fortune {
+  display: grid;
+  gap: 4px;
+  animation: sheetUp 0.3s ease both;
+}
+
+.fortune__line {
+  margin: 0;
+  font-family: var(--serif);
+  font-weight: 900;
+  font-size: 15px;
+}
+
+.fortune__meta {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink-80);
+}
+
+.fortune__go {
+  justify-self: start;
+  font-size: 12px;
+}
+
+.balance {
+  display: grid;
+  gap: 6px;
+}
+
+.balance__q {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.balance__opts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.balance__opt {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-height: 38px;
+  padding: 4px 10px;
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  background: var(--paper);
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  text-align: left;
+}
+
+.balance__opt--mine {
+  outline: 3px solid var(--tangerine);
+  outline-offset: 1px;
+}
+
+.balance__bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--mustard-soft);
+  transition: width 0.6s var(--spring);
+}
+
+.balance__label,
+.balance__pct {
+  position: relative;
+}
+
+.balance__foot {
+  margin: 0;
+  font-size: 11px;
+}
+
+@media (max-width: 1023px) {
+  .hero__grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+}
+
+/* ---------- PC: 한 화면 안에 (세로 스크롤 없이, 넘치는 곳만 안에서 스크롤) ---------- */
+
+@media (min-width: 1024px) and (min-height: 660px) {
+  body:has(.app--paged) {
+    overflow: hidden;
+  }
+
+  .app--paged {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .app--paged .marquee {
+    flex: none;
+  }
+
+  .app--paged .wrap {
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    padding-top: 14px;
+    padding-bottom: 14px;
+    gap: 12px;
+  }
+
+  .app--paged .hero,
+  .app--paged .stepbar,
+  .app--paged .banner {
+    flex: none;
+  }
+
+  .app--paged .stepbar {
+    position: static;
+  }
+
+  .app--paged .pager {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .app--paged .page {
+    height: 100%;
+    gap: 12px;
+  }
+
+  .app--paged .page > .panel,
+  .app--paged .page > .skeleton {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+  }
+
+  .app--paged .footer {
+    display: none;
+  }
+
+  /* STEP 03: 날씨 띠지 + 편찬대가 남은 높이를 나눠 쓴다 */
+  .app--paged .page > .wband,
+  .app--paged .page > .page-cta {
+    flex: none;
+    margin-top: 0;
+  }
+
+  .app--paged .page > .publish {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .app--paged .publish > * {
+    min-height: 0;
+    overflow: auto;
+  }
+
+  .app--paged .stage {
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .app--paged .book {
+    min-height: 0;
+    height: min(560px, calc(100% - 24px));
+  }
+
+  /* STEP 04: 지도는 그대로, 카드 목록만 안에서 스크롤 */
+  .app--paged .page > .panel:has(.shelf-area) {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .app--paged .shelf-area {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .app--paged .shelf-area__list {
+    height: 100%;
+    overflow: auto;
+    padding: 4px 10px 12px 4px;
+  }
+
+  .app--paged .shelf-area__map {
+    position: static;
+    height: 100%;
+  }
+
+  .app--paged .shelf-area__map > div,
+  .app--paged .shelf-area__map .map-wrap {
+    height: 100%;
+  }
+
+  .app--paged .shelf-area__map .map {
+    height: 100%;
+    max-height: none;
+  }
+}
+
+/* 높이가 낮은 노트북 화면: 머리를 더 줄이고, 넘치는 편찬대는 안에서 스크롤 */
+@media (min-width: 1024px) and (min-height: 660px) and (max-height: 860px) {
+  .app--paged .hero {
+    padding: 10px 16px;
+  }
+  .app--paged .hero__lead {
+    display: none;
+  }
+  .app--paged .hero__brand .hero__title {
+    font-size: 32px;
+  }
+  .app--paged .cookie {
+    min-height: 40px;
+  }
+  .app--paged .stepnav__btn,
+  .app--paged .stepnav__arrow {
+    min-height: 36px;
+  }
+  .app--paged .gtile {
+    min-height: 60px;
+  }
+  .app--paged .fbox {
+    gap: 6px;
+  }
+  .app--paged .stage {
+    overflow: auto;
+  }
+}

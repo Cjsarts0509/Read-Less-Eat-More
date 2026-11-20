@@ -6,6 +6,7 @@ import { nearestBranch, radiusForDrive, radiusForWalk, WALK_RADIUS_M } from "../
 import { BookShelf } from "./components/BookShelf";
 import { BranchMap } from "./components/BranchMap";
 import { CategoryTabs, FilterBar } from "./components/FilterBar";
+import { FunCorner } from "./components/FunCorner";
 import { PlaceCard } from "./components/PlaceCard";
 import { PlaceDetail } from "./components/PlaceDetail";
 import { LibrarianChat } from "./components/LibrarianChat";
@@ -473,42 +474,53 @@ export function App() {
       <Marquee />
 
       <div className="wrap">
-        {/* 머리: 에디토리얼 표지 */}
+        {/* 머리: 제목 · 심심풀이 · 오늘의 서가 */}
         <header className="panel panel--lg hero">
-          <div className="hero__row">
-            <div className="hero__pills">
-              <span className="pill-green">
-                <span className="ping" aria-hidden />
-                전국 식도락 출판사 · KDC-LUNCH
-              </span>
-              <button type="button" className="sticker" onClick={() => showToast("사람은 책을 만들고, 점심은 사람을 만든다!", "🏷️")}>
-                🏷️ 교보먹고 에디션
-              </button>
-            </div>
-            <button
-              type="button"
-              className="bbtn bbtn--sm"
-              aria-pressed={sound}
-              onClick={() => {
-                sfx.setEnabled(!sound);
-                setSound(!sound);
-                if (!sound) sfx.spinePop();
-              }}
-            >
-              {sound ? "🔊 효과음" : "🔇 효과음"}
-            </button>
-          </div>
-
-          <div className="hero__main">
-            <div>
-              <p className="kicker">LUNCH MAKES THE PERSON — 전국 지점 점심 큐레이션</p>
+          <div className="hero__grid">
+            <div className="hero__brand">
+              <div className="hero__pills">
+                <span className="pill-green">
+                  <span className="ping" aria-hidden />
+                  전국 식도락 출판사
+                </span>
+                <button type="button" className="sticker" onClick={() => showToast("사람은 책을 만들고, 점심은 사람을 만든다!", "🏷️")}>
+                  🏷️ 교보먹고 에디션
+                </button>
+                <button
+                  type="button"
+                  className="sound-btn"
+                  aria-pressed={sound}
+                  aria-label={sound ? "책장 효과음 끄기" : "책장 효과음 켜기"}
+                  onClick={() => {
+                    sfx.setEnabled(!sound);
+                    setSound(!sound);
+                    if (!sound) sfx.spinePop();
+                  }}
+                >
+                  {sound ? "🔊" : "🔇"}
+                </button>
+              </div>
               <h1 className="hero__title">
                 점심은 <mark>사람을</mark> 만든다
               </h1>
-              <p className="hero__lead">
-                “사람은 책을 만들고, 점심은 사람을 만든다.” 오늘 근무하는 지점의 책등을 뽑아 12시의 필독 메뉴를 편찬하세요.
-              </p>
+              <p className="hero__lead">사람은 책을 만들고, 점심은 사람을 만든다. 오늘 근무하는 지점에서 12시의 필독 메뉴를 편찬하세요.</p>
             </div>
+
+            <FunCorner
+              today={today}
+              canVote={config.store && !DEMO}
+              onToast={showToast}
+              onLuckyGenre={
+                selected && places.status === "ready"
+                  ? (k) => {
+                      setTab(k);
+                      go(3);
+                      showToast(`오늘의 행운 장르 「${CATEGORY_BY_KEY[k].label}」로 편찬해요`, "🥠");
+                    }
+                  : null
+              }
+            />
+
             <div className="stock" aria-live="polite">
               <div className="stock__head">
                 <span>{formatDate(new Date().toISOString())} 식사재고</span>

@@ -50,3 +50,13 @@ export interface ReviewSummary {
   /** 내가 쓴 평가 (me 를 보냈을 때) */
   mine?: { rating: number; comment: string };
 }
+
+/** /api/balance 응답: 오늘의 밸런스 게임 */
+export interface BalanceResponse {
+  day: string;
+  q: string;
+  a: string;
+  b: string;
+  counts: { a: number; b: number };
+  mine: "a" | "b" | null;
+}

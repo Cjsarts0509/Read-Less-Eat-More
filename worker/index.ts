@@ -9,10 +9,12 @@
  *  - /api/menus        지점별 제보된 메뉴판
  *  - /api/place-live   상세 화면 실시간 확인 (영업시간 · 메뉴, AI 웹 검색 + Supabase 캐시)
  *  - /api/reviews      사내 한줄평 · 별점
+ *  - /api/balance      오늘의 밸런스 게임
  */
 import Anthropic from "@anthropic-ai/sdk";
 import { handleChat } from "./chat";
 import { HttpError, json, todayKst, type Env } from "./env";
+import { handleBalance } from "./balance";
 import { handlePlaceLive } from "./live";
 import { handleReviews } from "./reviews";
 import { handleMenuPhoto, handleMenus } from "./menus";
@@ -50,6 +52,8 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
       return handlePlaceLive(request, env);
     case "reviews":
       return handleReviews(request, env);
+    case "balance":
+      return handleBalance(request, env);
     default:
       throw new HttpError(404, "not found");
   }
