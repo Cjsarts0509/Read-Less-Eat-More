@@ -1,4 +1,3 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type { Branch, DataIndex } from "../../shared/types";
 import { hashString } from "../lib/random";
 import { sfx } from "../lib/sfx";
@@ -10,12 +9,32 @@ interface Props {
   onSelect: (code: string) => void;
 }
 
-/** 책장 두 칸: 위 칸 = 강남 · 남부사업단, 아래 칸 = 그 밖 (강북사업단 · 본사 …) */
-const TOP_DIVISIONS = ["강남사업단", "남부사업단"];
+/** 사업단마다 작은 책장 하나: 서가 번호 · 지역 무늬 */
+interface Theme {
+  code: string;
+  icon: string;
+  sub: string;
+  key: string;
+}
+
+const THEMES: Record<string, Theme> = {
+  강남사업단: { code: "A", icon: "🏙️", sub: "서울 강남 · 경기 남부", key: "gangnam" },
+  남부사업단: { code: "B", icon: "🌊", sub: "충청 · 영남 · 호남", key: "nambu" },
+  강북사업단: { code: "C", icon: "🏯", sub: "서울 강북 · 인천 · 일산", key: "gangbuk" },
+  본사: { code: "HQ", icon: "📚", sub: "상암 · 파주 출판도시", key: "hq" },
+};
+
+function themeOf(division: string, i: number): Theme {
+  return THEMES[division] ?? { code: String.fromCharCode(68 + i), icon: "📖", sub: "", key: "etc" };
+}
 
 /**
- * 책등 색 (배경 / 글자) — 13가지. 칸마다 5칸씩 건너 고르므로 이웃한 책끼리 같은 색이 나오지 않는다.
+ * 칸 배치: 넓은 화면은 [A | B] / [C + HQ | 열람 코너], 좁은 화면은 A / B / C + HQ.
+ * 어느 칸이든 책 12권 폭이라 책 크기가 고르다.
  */
+const CELLS: string[][] = [["강남사업단"], ["남부사업단"], ["강북사업단", "본사"]];
+
+/** 책등 색 (배경 / 글자) — 13가지. 5칸씩 건너 고르므로 이웃한 책끼리 같은 색이 나오지 않는다 */
 const PALETTE: Array<[string, string]> = [
   ["#005b41", "#faf8f3"], // 교보 초록
   ["#1a2b4c", "#f5b82e"], // 남색 · 금박
@@ -51,34 +70,69 @@ function groupByDivision(branches: Branch[]): Group[] {
 }
 
 export function BookShelf({ branches, index, selected, onSelect }: Props) {
-  const rows = useMemo(() => {
-    const groups = groupByDivision(branches);
-    const top = TOP_DIVISIONS.map((d) => groups.find((g) => g.division === d)).filter((g): g is Group => Boolean(g));
-    const order = ["강북사업단", "본사"];
-    const bottom = groups
-      .filter((g) => !TOP_DIVISIONS.includes(g.division))
-      .sort((a, b) => {
-        const ia = order.indexOf(a.division);
-        const ib = order.indexOf(b.division);
-        return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
-      });
-    return [top, bottom].filter((r) => r.length > 0);
-  }, [branches]);
+  const groups = groupByDivision(branches);
+  const known = new Set(CELLS.flat());
+  const cells = CELLS.map((names) => names.map((n) => groups.find((g) => g.division === n)).filter((g): g is Group => Boolean(g)));
+  // 목록에 없는 사업단이 생기면 마지막 칸에 붙인다
+  cells[cells.length - 1]!.push(...groups.filter((g) => !known.has(g.division)));
 
-  const caseRef = useRef<HTMLDivElement>(null);
-  // 고른 책등이 보이도록 그 칸만 가로로 움직인다
-  useEffect(() => {
-    if (!selected || !caseRef.current) return;
-    const el = caseRef.current.querySelector<HTMLElement>(`[data-code="${selected.code}"]`);
-    el?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
-  }, [selected]);
-
+  let n = 0;
   return (
-    <div className="case" ref={caseRef}>
+    <div className="case">
       <div className="case__inner">
-        {rows.map((groups, r) => (
-          <ShelfRow key={r} row={r} groups={groups} index={index} selected={selected} onSelect={onSelect} last={r === rows.length - 1} />
-        ))}
+        {cells.map((row, r) =>
+          row.length ? (
+            <div key={r} className={`case__cell case__cell--${r}`}>
+              {row.map((g) => {
+                const t = themeOf(g.division, groups.indexOf(g));
+                return (
+                  <section
+                    key={g.division}
+                    className="bay"
+                    data-theme={t.key}
+                    style={{ "--n": g.branches.length } as React.CSSProperties}
+                    aria-label={`${g.division} 서가`}
+                  >
+                    <header className="bay__sign">
+                      <span className="bay__code">{t.code}</span>
+                      <span className="bay__title">
+                        <b>
+                          <span className="bay__icon" aria-hidden>
+                            {t.icon}
+                          </span>{" "}
+                          {g.division}
+                        </b>
+                        {t.sub && <small>{t.sub}</small>}
+                      </span>
+                      <span className="bay__count">{g.branches.length}</span>
+                    </header>
+                    <div className="bay__books">
+                      {g.branches.map((b) => {
+                        const i = n++;
+                        const h = hashString(b.code);
+                        return (
+                          <Spine
+                            key={b.code}
+                            branch={b}
+                            color={PALETTE[(i * 5) % PALETTE.length]!}
+                            pattern={PATTERNS[(i * 3 + h) % PATTERNS.length]!}
+                            k={0.8 + (h % 5) * 0.05}
+                            grow={0.9 + ((h >> 4) % 4) * 0.08}
+                            count={index?.branches[b.code]?.count}
+                            active={selected?.code === b.code}
+                            onSelect={onSelect}
+                          />
+                        );
+                      })}
+                    </div>
+                    <div className="bay__plank" aria-hidden />
+                  </section>
+                );
+              })}
+            </div>
+          ) : null,
+        )}
+        <Nook />
       </div>
       <div className="case__foot">
         <span>KYOBO NATIONAL LUNCH ARCHIVE</span>
@@ -88,90 +142,37 @@ export function BookShelf({ branches, index, selected, onSelect }: Props) {
   );
 }
 
-function ShelfRow({
-  row,
-  groups,
-  index,
-  selected,
-  onSelect,
-  last,
-}: {
-  row: number;
-  groups: Group[];
-  index: DataIndex | null;
-  selected: Branch | null;
-  onSelect: (code: string) => void;
-  last: boolean;
-}) {
-  const track = useRef<HTMLDivElement>(null);
-  // 칸이 넘칠 때만 좌우 화살표를 보인다
-  const [overflow, setOverflow] = useState(false);
-  useEffect(() => {
-    const el = track.current;
-    if (!el) return;
-    const check = () => setOverflow(el.scrollWidth > el.clientWidth + 4);
-    check();
-    const ro = new ResizeObserver(check);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [groups]);
-  const scrollBy = (dir: number) => track.current?.scrollBy({ left: dir * track.current.clientWidth * 0.7, behavior: "smooth" });
-  let i = 0;
+/** 넓은 화면의 빈칸: 열람 코너 (장식) */
+function Nook() {
   return (
-    <div className={`case__row${overflow ? " case__row--more" : ""}`}>
-      {overflow && (
-        <button type="button" className="case__nav case__nav--l" onClick={() => scrollBy(-1)} aria-label="책장 왼쪽으로">
-          ◀
-        </button>
-      )}
-      <div className="case__track" ref={track}>
-        {groups.map((g) => (
-          <Fragment key={g.division}>
-            <div className="bookend" aria-hidden>
-              <span>{g.division}</span>
-              <small>{g.branches.length}</small>
-            </div>
-            {g.branches.map((b) => {
-              const n = i++;
-              const h = hashString(b.code);
-              return (
-                <Spine
-                  key={b.code}
-                  branch={b}
-                  color={PALETTE[(n * 5 + row * 3) % PALETTE.length]!}
-                  pattern={PATTERNS[(n * 3 + h) % PATTERNS.length]!}
-                  height={150 + (h % 5) * 9}
-                  width={50 + ((h >> 4) % 4) * 4}
-                  count={index?.branches[b.code]?.count}
-                  active={selected?.code === b.code}
-                  onSelect={onSelect}
-                />
-              );
-            })}
-          </Fragment>
-        ))}
-        <div className="case__deco" aria-hidden>
-          {row === 0 ? (
-            <span className="case__plant">🪴</span>
-          ) : (
-            <>
-              <span className="case__stack">
-                <i />
-                <i />
-                <i />
-              </span>
-              <span className="case__plant">☕</span>
-            </>
-          )}
+    <section className="bay bay--nook" data-theme="nook" aria-hidden>
+      <header className="bay__sign">
+        <span className="bay__code">R</span>
+        <span className="bay__title">
+          <b>
+            <span className="bay__icon">☕</span> 열람 코너
+          </b>
+          <small>점심시간 11:30 – 13:00</small>
+        </span>
+      </header>
+      <div className="bay__books nook">
+        <div className="nook__board">
+          <b>오늘의 열람 안내</b>
+          <span>책등을 고르면</span>
+          <span>점심 서가가 열립니다</span>
+          <i>— 사서 드림</i>
         </div>
+        <span className="nook__globe">🌐</span>
+        <span className="case__stack">
+          <i />
+          <i />
+          <i />
+        </span>
+        <span className="nook__plant">🪴</span>
+        <span className="nook__mug">☕</span>
       </div>
-      {overflow && (
-        <button type="button" className="case__nav case__nav--r" onClick={() => scrollBy(1)} aria-label="책장 오른쪽으로">
-          ▶
-        </button>
-      )}
-      <div className={`case__plank${last ? " case__plank--last" : ""}`} aria-hidden />
-    </div>
+      <div className="bay__plank" />
+    </section>
   );
 }
 
@@ -179,8 +180,8 @@ function Spine({
   branch,
   color,
   pattern,
-  height,
-  width,
+  k,
+  grow,
   count,
   active,
   onSelect,
@@ -188,8 +189,8 @@ function Spine({
   branch: Branch;
   color: [string, string];
   pattern: (typeof PATTERNS)[number];
-  height: number;
-  width: number;
+  k: number;
+  grow: number;
   count: number | undefined;
   active: boolean;
   onSelect: (code: string) => void;
@@ -200,7 +201,7 @@ function Spine({
       data-code={branch.code}
       data-pattern={pattern}
       className={`spine${active ? " spine--on" : ""}`}
-      style={{ "--spine-bg": color[0], "--spine-fg": color[1], "--spine-h": `${height}px`, width } as React.CSSProperties}
+      style={{ "--spine-bg": color[0], "--spine-fg": color[1], "--k": k, "--g": grow } as React.CSSProperties}
       aria-pressed={active}
       aria-label={`${branch.label} 선택 (${branch.region})`}
       title={`${branch.label} · ${branch.address}${count !== undefined ? ` · 식당 ${count}곳` : ""}`}
@@ -214,8 +215,12 @@ function Spine({
           ★
         </span>
       )}
-      <span className="spine__kdc">KDC-{branch.code}</span>
-      <span className="spine__name">{branch.label}</span>
+      <span className="spine__kdc">
+        <i>KDC-</i>
+        {branch.code}
+      </span>
+      {/* 책등엔 '점'을 떼어 짧게 (세로로 두 줄이 되는 걸 줄인다) */}
+      <span className="spine__name">{branch.label.replace(/(.{2,})점$/, "$1")}</span>
       <span className="spine__region">{branch.region}</span>
     </button>
   );

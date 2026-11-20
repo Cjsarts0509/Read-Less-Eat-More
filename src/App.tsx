@@ -54,7 +54,7 @@ function useMedia(query: string): boolean {
 }
 
 /** 스와이프로 책장 넘기기에서 뺄 곳 (지도 · 가로 스크롤 · 입력칸 · 팝업) */
-const NO_SWIPE = ".no-swipe, .leaflet-container, .case__track, input, textarea, select, .sheet";
+const NO_SWIPE = ".no-swipe, .leaflet-container, input, textarea, select, .sheet";
 type PlacesState = { status: "idle" } | { status: "loading" } | { status: "missing" } | { status: "ready"; data: BranchPlaces };
 
 const PAGE = 48;
@@ -610,7 +610,7 @@ export function App() {
               <div key={step} className={`page page--${dir}`} aria-label={`STEP 0${step} ${stepTitle}`}>
                 {/* STEP 01 지점 책장 */}
                 {step === 1 && (
-                  <section className="panel" aria-labelledby="s1">
+                  <section className="panel panel--shelf" aria-labelledby="s1">
                     <div className="step-row">
                       <div className="step-head">
                         <span className="step">STEP 01</span>
