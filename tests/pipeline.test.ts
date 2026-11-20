@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Branch, BranchPlaces } from "../shared/types";
-import { collectBranch, DEFAULT_CONFIG, needsAnalysis, serializeBranchPlaces, type Deps } from "../pipeline/core";
+import { collectBranch, DEFAULT_CONFIG, needsAnalysis, serializeBranchPlaces, toPlace, type Deps } from "../pipeline/core";
 import { collectNearby, type KakaoPlace } from "../pipeline/sources/kakao";
 import { areaHint, buildQuery, cleanText, toIsoDate } from "../pipeline/sources/naver";
 import { sanitizeInsight, supportsServerFallback, type Analyzer, type PlaceInsight } from "../pipeline/sources/claude";
@@ -455,5 +455,39 @@ describe("한두 글자 이름", () => {
     const today = data.places.find((p) => p.id === "o")!.naver!;
     expect(han).toMatchObject({ ambiguous: true, blogTotal: 0, rawTotal: 400000 });
     expect(today).toMatchObject({ ambiguous: true, blogTotal: 1 });
+  });
+});
+
+describe("AI 대기 중인 곳 다시 조회", () => {
+  it("이번 AI 예산의 두 배(최소 20곳)까지만, 인기 순으로 앞당긴다", async () => {
+    const docs = Array.from({ length: 30 }, (_, i) => kakaoDoc(`p${i}`, `가게${i}번집`, 0.0001 * (i + 1)));
+    const prev: BranchPlaces = {
+      branch: "001",
+      generatedAt: "",
+      radius: 1000,
+      sources: [],
+      places: docs.map((d, i) => ({
+        ...toPlace(d, branch, undefined, "2026-11-19"),
+        naver: { blogTotal: i, recentPosts: 0, latestPostDate: null, posts: [], query: "", checkedAt: "2026-11-19", v: 2, relevance: 1 },
+        aiPending: true,
+      })),
+    };
+    const asked: string[] = [];
+    const deps: Deps = {
+      today: "2026-11-20",
+      nowIso: "",
+      kakao: async () => docs,
+      naver: async (q) => {
+        asked.push(q);
+        return { total: 0, posts: [] };
+      },
+      google: null,
+      analyzer: null,
+    };
+    await collectBranch(branch, prev, DEFAULT_CONFIG, deps, { naver: 100, google: 0, ai: 5 });
+    // 예산 5 → 최소 20곳, 블로그 수가 많은(번호가 큰) 가게부터
+    expect(asked).toHaveLength(20);
+    expect(asked).toContain('"가게29번집" 종로1가');
+    expect(asked).not.toContain('"가게0번집" 종로1가');
   });
 });

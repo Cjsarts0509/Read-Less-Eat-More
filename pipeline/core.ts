@@ -144,14 +144,25 @@ export async function collectBranch(
   const freshPosts = new Map<string, BlogSearchResult["posts"]>();
   if (deps.naver) {
     const naver = deps.naver;
+    // AI 대기 중인 곳은 이번에 분석할 수 있는 만큼(인기 순)만 앞당겨 다시 조회한다.
+    // 대기 중인 수천 곳을 매일 다시 조회하면 네이버 호출만 낭비된다.
+    const pendingQuota = Math.max(20, Math.max(0, budget.ai) * 2);
+    const pendingFirst = new Set(
+      places
+        .filter((p) => p.aiPending)
+        .sort((a, b) => popularity(b) - popularity(a))
+        .slice(0, pendingQuota)
+        .map((p) => p.id),
+    );
     const stale = places
-      // relevance 가 없는 예전 형식(가게와 무관한 글까지 센 값)도 다시 조회
+      // 예전 형식(가게와 무관한 글까지 센 값)도 다시 조회
       .filter(
-        (p) => p.aiPending || !p.naver || (p.naver.v ?? 1) < NAVER_FORMAT || daysBetween(p.naver.checkedAt, today) >= cfg.naverRefreshDays,
+        (p) =>
+          pendingFirst.has(p.id) || !p.naver || (p.naver.v ?? 1) < NAVER_FORMAT || daysBetween(p.naver.checkedAt, today) >= cfg.naverRefreshDays,
       )
       .sort((a, b) => {
-        const pa = a.aiPending ? 0 : 1;
-        const pb = b.aiPending ? 0 : 1;
+        const pa = pendingFirst.has(a.id) ? 0 : 1;
+        const pb = pendingFirst.has(b.id) ? 0 : 1;
         return pa - pb || (a.naver?.checkedAt ?? "").localeCompare(b.naver?.checkedAt ?? "");
       });
     const targets = stale.slice(0, Math.max(0, budget.naver));
