@@ -74,6 +74,10 @@ export interface NaverInfo {
   rawTotal?: number;
   /** 최신 글 중 이 가게 이야기로 보이는 글 비율 0~1. blogTotal 은 rawTotal × 이 비율 */
   relevance?: number;
+  /** 이름이 한두 글자라 흔한 낱말과 섞여 검색 수를 믿기 어려움 (blogTotal 은 관련 글 수만) */
+  ambiguous?: boolean;
+  /** 데이터 형식 버전 (바뀌면 다시 조회) */
+  v?: number;
   /** 최근 30일 안에 올라온 글 수 (최신 10개 기준) */
   recentPosts: number;
   latestPostDate: string | null;

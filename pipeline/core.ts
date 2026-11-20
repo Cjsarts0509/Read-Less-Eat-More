@@ -11,7 +11,10 @@ import type { Branch, BranchPlaces, GoogleInfo, Place, WebInfo } from "../shared
 import { mapLimit } from "./http";
 import type { KakaoPlace } from "./sources/kakao";
 import type { BlogSearchResult } from "./sources/naver";
-import { blogQuery, isRelevantPost } from "./sources/naver";
+import { blogQuery, isAmbiguousName, isRelevantPost, isStrictRelevantPost } from "./sources/naver";
+
+/** NaverInfo 형식 버전 — 올리면 다음 수집 때 모두 다시 조회한다 */
+const NAVER_FORMAT = 2;
 import type { Analyzer, InsightInput } from "./sources/claude";
 
 export interface CollectConfig {
@@ -144,7 +147,7 @@ export async function collectBranch(
     const stale = places
       // relevance 가 없는 예전 형식(가게와 무관한 글까지 센 값)도 다시 조회
       .filter(
-        (p) => p.aiPending || !p.naver || p.naver.relevance === undefined || daysBetween(p.naver.checkedAt, today) >= cfg.naverRefreshDays,
+        (p) => p.aiPending || !p.naver || (p.naver.v ?? 1) < NAVER_FORMAT || daysBetween(p.naver.checkedAt, today) >= cfg.naverRefreshDays,
       )
       .sort((a, b) => {
         const pa = a.aiPending ? 0 : 1;
@@ -159,14 +162,18 @@ export async function collectBranch(
         stats.naverCalls++;
         const res = await naver(q.query);
         // 이름이 흔한 단어면 무관한 글이 섞인다 → 이 가게 이야기인 글만 쓰고, 검색 결과 수도 그 비율만큼 줄인다
-        const relevant = res.posts.filter((post) => isRelevantPost(post, q));
+        // 한두 글자 이름(「한」「오늘」)은 흔한 낱말과 섞여 검색 수를 믿을 수 없다 → 제목에 이름 + 동네가 함께 있는 글만, 수도 그 글 수만
+        const ambiguous = isAmbiguousName(q.core);
+        const relevant = res.posts.filter((post) => (ambiguous ? isStrictRelevantPost(post, q) : isRelevantPost(post, q)));
         const relevance = res.posts.length ? relevant.length / res.posts.length : 0;
         const recent = relevant.filter((post) => post.date && daysBetween(post.date, today) <= 30).length;
-        const hadOldFormat = p.naver !== null && p.naver.relevance === undefined;
+        const hadOldFormat = p.naver !== null && (p.naver.v ?? 1) < NAVER_FORMAT;
         p.naver = {
-          blogTotal: Math.round(res.total * relevance),
+          blogTotal: ambiguous ? relevant.length : Math.round(res.total * relevance),
           rawTotal: res.total,
           relevance: Math.round(relevance * 100) / 100,
+          ambiguous: ambiguous || undefined,
+          v: NAVER_FORMAT,
           sponsoredHint: relevant.filter((post) => SPONSORED_RE.test(`${post.title} ${post.snippet}`)).length,
           recentPosts: recent,
           latestPostDate: relevant.find((post) => post.date)?.date ?? null,

@@ -106,6 +106,17 @@ export function blogQuery(name: string, jibunAddress: string, roadAddress: strin
   return { query, core, hint, gu };
 }
 
+/** 이름이 두 글자 이하면 「한」「오늘」「밥」처럼 흔한 낱말과 섞인다 */
+export function isAmbiguousName(core: string): boolean {
+  return core.replace(/\s+/g, "").length <= 2;
+}
+
+/** 짧은 이름용 엄격한 관련성: 제목에 가게 이름과 동네 이름이 함께 있어야 한다 (한 글자 이름은 불가) */
+export function isStrictRelevantPost(post: { title: string }, q: Pick<BlogQuery, "core" | "hint" | "gu">): boolean {
+  if (q.core.replace(/\s+/g, "").length <= 1) return false;
+  return isRelevantPost({ title: post.title, snippet: "" }, q);
+}
+
 /** 검색어 문자열만 */
 export function buildQuery(name: string, jibunAddress: string, roadAddress: string): string {
   return blogQuery(name, jibunAddress, roadAddress).query;

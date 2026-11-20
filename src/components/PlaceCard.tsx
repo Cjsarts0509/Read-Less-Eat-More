@@ -114,8 +114,14 @@ export function PlaceCard({ place, ctx, highlighted, onShowOnMap, menus, upload 
             </dd>
           </div>
         )}
-        {place.naver && (
-          <div className="stat" title={`네이버 블로그 검색 「${place.naver.query}」 결과 수`}>
+        {place.naver?.ambiguous && (
+          <div className="stat" title="가게 이름이 흔한 낱말이라 블로그 글 수를 정확히 셀 수 없어요">
+            <dt>블로그 리뷰</dt>
+            <dd className="muted">이름이 흔해 집계 어려움</dd>
+          </div>
+        )}
+        {place.naver && !place.naver.ambiguous && (
+          <div className="stat" title={`네이버 블로그 검색 「${place.naver.query}」 결과 중 이 가게 이야기로 보이는 글 비율로 보정한 수`}>
             <dt>블로그 리뷰</dt>
             <dd>
               {fmt.format(place.naver.blogTotal)}

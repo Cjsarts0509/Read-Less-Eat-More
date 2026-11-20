@@ -406,12 +406,12 @@ describe("블로그 글 관련성 (흔한 이름의 부풀려진 검색 수 거�
     const deps: Deps = {
       today: "2026-11-20",
       nowIso: "2026-11-20T00:00:00.000Z",
-      kakao: async () => [kakaoDoc("x", "오늘", 0.001)],
+      kakao: async () => [kakaoDoc("x", "오늘의식탁", 0.001)],
       naver: async () => ({
         total: 300000,
         posts: [
-          { title: "오늘 하루", link: "1", date: "2026-11-19", snippet: "일상" },
-          { title: "종로1가 오늘 점심", link: "2", date: "2026-11-18", snippet: "백반" },
+          { title: "오늘의 식단 일기", link: "1", date: "2026-11-19", snippet: "일상" },
+          { title: "종로1가 오늘의식탁 점심", link: "2", date: "2026-11-18", snippet: "백반" },
         ],
       }),
       google: null,
@@ -429,5 +429,31 @@ describe("블로그 글 관련성 (흔한 이름의 부풀려진 검색 수 거�
     expect(n.relevance).toBe(0.5);
     expect(n.blogTotal).toBe(150000);
     expect(seenByAi).toEqual([1]);
+  });
+});
+
+describe("한두 글자 이름", () => {
+  it("검색 수를 믿지 않고, 제목에 이름 + 동네가 함께 있는 글만 센다", async () => {
+    const deps: Deps = {
+      today: "2026-11-20",
+      nowIso: "2026-11-20T00:00:00.000Z",
+      kakao: async () => [kakaoDoc("h", "한", 0.001), kakaoDoc("o", "오늘", 0.0015)],
+      naver: async (q) => ({
+        total: 400000,
+        posts: q.includes("오늘")
+          ? [
+              { title: "종로1가 오늘 점심 후기", link: "1", date: "2026-11-19", snippet: "" },
+              { title: "오늘 하루", link: "2", date: "2026-11-18", snippet: "종로1가 산책" },
+            ]
+          : [{ title: "종로1가 한 바퀴", link: "3", date: "2026-11-19", snippet: "" }],
+      }),
+      google: null,
+      analyzer: null,
+    };
+    const { data } = await collectBranch(branch, null, DEFAULT_CONFIG, deps, { naver: 10, google: 0, ai: 0 });
+    const han = data.places.find((p) => p.id === "h")!.naver!;
+    const today = data.places.find((p) => p.id === "o")!.naver!;
+    expect(han).toMatchObject({ ambiguous: true, blogTotal: 0, rawTotal: 400000 });
+    expect(today).toMatchObject({ ambiguous: true, blogTotal: 1 });
   });
 });
