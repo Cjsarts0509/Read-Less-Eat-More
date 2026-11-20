@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CATEGORY_BY_KEY } from "../shared/categories";
 import type { Branch, BranchPlaces, CategoryKey, DataIndex } from "../shared/types";
 import type { MenuReport, ReviewSummary, WeatherResponse } from "../shared/api";
-import { nearestBranch } from "../shared/geo";
+import { nearestBranch, radiusForDrive, radiusForWalk, WALK_RADIUS_M } from "../shared/geo";
 import { BookShelf } from "./components/BookShelf";
 import { BranchMap } from "./components/BranchMap";
 import { CategoryTabs, FilterBar } from "./components/FilterBar";
@@ -185,8 +185,8 @@ export function App() {
   }, [selected, config.store]);
   useEffect(refreshMenus, [refreshMenus]);
   useEffect(() => {
-    const { walk, lunchOnly, sort } = filters;
-    writeStore("rlem:filters", { walk, lunchOnly, sort, budget: filters.budget });
+    const { walk, lunchOnly, sort, mode, drive } = filters;
+    writeStore("rlem:filters", { walk, lunchOnly, sort, mode, drive, budget: filters.budget });
     setVisible(PAGE);
   }, [filters]);
 
@@ -216,8 +216,8 @@ export function App() {
   const showToast = useCallback((msg: string, icon = "✅") => setToast((t) => ({ msg, icon, n: (t?.n ?? 0) + 1 })), []);
 
   const ctx: Ctx = useMemo(
-    () => ({ today, baselineDate: DEMO ? null : (index?.baselineDate ?? null), reviews, menus, budget: filters.budget }),
-    [today, index, reviews, menus, filters.budget],
+    () => ({ today, baselineDate: DEMO ? null : (index?.baselineDate ?? null), reviews, menus, budget: filters.budget, mode: filters.mode }),
+    [today, index, reviews, menus, filters.budget, filters.mode],
   );
   // 배달 · 포장 전문점은 목록 · 지도 · 뽑기에서 뺀다
   const all = useMemo(() => (places.status === "ready" ? places.data.places.filter((p) => !p.deliveryOnly) : []), [places]);
@@ -371,7 +371,17 @@ export function App() {
   const tabLabel = tab === "all" ? "전체" : CATEGORY_BY_KEY[tab].label;
   const detailPlace = detailId ? (all.find((p) => p.id === detailId) ?? null) : null;
   const bestsellers = inhouseTop(all, ctx);
-  const poolDesc = `${filters.walk ? `도보 ${filters.walk}분` : "반경 전체"} · ${tabLabel}${filters.lunchOnly ? " · 점심 영업" : ""}`;
+  const reachDesc =
+    filters.mode === "drive" ? (filters.drive ? `차로 ${filters.drive}분` : "차로 반경 전체") : filters.walk ? `도보 ${filters.walk}분` : "도보 반경 전체";
+  const mapRadius =
+    filters.mode === "drive"
+      ? filters.drive
+        ? radiusForDrive(filters.drive)
+        : 0
+      : filters.walk
+        ? Math.min(WALK_RADIUS_M, radiusForWalk(filters.walk))
+        : WALK_RADIUS_M;
+  const poolDesc = `${reachDesc} · ${tabLabel}${filters.lunchOnly ? " · 점심 영업" : ""}`;
   const branchInfo = selected ? index?.branches[selected.code] : undefined;
   const sorts = (Object.keys(SORT_LABEL) as SortKey[]).filter((s) => s !== "rating" || hasRating);
   const weatherText = weather?.available ? `${weather.precip || weather.sky} · ${weather.tmin}~${weather.tmax}℃ · 강수확률 ${weather.pop ?? "?"}%` : undefined;
@@ -573,7 +583,7 @@ export function App() {
                         branches={branches}
                         selected={selected}
                         places={[]}
-                        walk={0}
+                        radius={0}
                         focus={null}
                         onSelectBranch={pickBranch}
                         onShowCard={() => {}}
@@ -684,7 +694,7 @@ export function App() {
                         </div>
                       </div>
                       <p className="hint">
-                        {tabLabel} · {filters.walk ? `도보 ${filters.walk}분` : "반경 전체"}
+                        {tabLabel} · {reachDesc}
                         {filters.lunchOnly ? " · 점심 영업" : ""}
                         {hiddenDelivery > 0 && ` · 배달 · 포장 전문 ${hiddenDelivery}곳 제외`}
                         {" · "}
@@ -710,7 +720,8 @@ export function App() {
                               branches={branches}
                               selected={selected}
                               places={mapPlaces}
-                              walk={filters.walk}
+                              radius={mapRadius}
+                              drive={filters.mode === "drive"}
                               focus={focus}
                               onSelectBranch={selectBranch}
                               onShowCard={showCard}

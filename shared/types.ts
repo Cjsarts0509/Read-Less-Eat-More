@@ -201,6 +201,8 @@ export interface Place {
   kakaoUrl: string;
   /** 이 파이프라인이 처음 본 날짜 YYYY-MM-DD */
   firstSeen: string;
+  /** 차량 모드용으로 모은 곳(도보 반경 밖)을 마지막으로 검색에서 본 날 */
+  lastSeen?: string;
   naver: NaverInfo | null;
   google: GoogleInfo | null;
   ai: AiInsight | null;

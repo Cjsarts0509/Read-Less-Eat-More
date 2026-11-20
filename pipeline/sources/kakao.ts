@@ -84,6 +84,48 @@ export async function collectNearby(opts: CollectOptions): Promise<KakaoPlace[]>
   return [...found.values()];
 }
 
+const KEYWORD_ENDPOINT = "https://dapi.kakao.com/v2/local/search/keyword.json";
+
+/** 차량 모드용으로 「맛집」 같은 낱말로 찾는 검색어 (카카오 정확도순 = 지도에서 많이 찾는 곳) */
+export const DRIVE_QUERIES = ["맛집", "점심 맛집", "한식 맛집", "가성비 맛집", "백반", "국밥", "중식", "일식", "고기", "칼국수"];
+
+/**
+ * 낱말 검색으로 반경 안 음식점을 정확도순으로 모은다 (검색어마다 최대 45곳).
+ * 먼저 나온 곳이 앞에 오도록 순서를 지킨다.
+ */
+export async function searchKeywordPlaces(opts: {
+  apiKey: string;
+  center: LatLng;
+  radius: number;
+  queries?: string[];
+  fetchImpl?: FetchLike;
+  onRequest?: () => void;
+}): Promise<KakaoPlace[]> {
+  const fetchImpl = opts.fetchImpl ?? fetch;
+  const found = new Map<string, KakaoPlace>();
+  for (const q of opts.queries ?? DRIVE_QUERIES) {
+    for (let page = 1; page <= MAX_PAGES; page++) {
+      const params = new URLSearchParams({
+        query: q,
+        category_group_code: "FD6",
+        x: String(opts.center.lng),
+        y: String(opts.center.lat),
+        radius: String(Math.min(20000, Math.round(opts.radius))),
+        page: String(page),
+        size: String(PAGE_SIZE),
+        sort: "accuracy",
+      });
+      opts.onRequest?.();
+      const res = await fetchJson<KakaoResponse>(fetchImpl, `${KEYWORD_ENDPOINT}?${params}`, {
+        headers: { Authorization: `KakaoAK ${opts.apiKey}` },
+      });
+      for (const d of res.documents) if (!found.has(d.id)) found.set(d.id, d);
+      if (res.meta.is_end) break;
+    }
+  }
+  return [...found.values()];
+}
+
 interface KakaoAddressResponse {
   documents: Array<{ address_name: string; x: string; y: string }>;
 }

@@ -258,7 +258,7 @@ describe("점심 1인 가격 어림", () => {
   it("예산 필터는 가격을 아는 곳 중 넘는 곳만 뺀다", async () => {
     const { applyFilters, DEFAULT_FILTERS } = await import("../src/lib/filters");
     const mk = (id: string, hint: string | null) =>
-      ({ id, name: id, walkMin: 3, lunch: "open", category: "korean", categoryPath: "", ai: hint ? { priceHint: hint, badges: [] } : null, naver: null }) as unknown as Place;
+      ({ id, name: id, walkMin: 3, distance: 200, lunch: "open", category: "korean", categoryPath: "", ai: hint ? { priceHint: hint, badges: [] } : null, naver: null }) as unknown as Place;
     const out = applyFilters([mk("싼곳", "8천원대"), mk("비싼곳", "2만원"), mk("모름", null)], { ...DEFAULT_FILTERS, walk: 0, budget: 10000 }, {
       today: "2026-11-20",
       baselineDate: null,
@@ -277,5 +277,23 @@ describe("가장 가까운 지점", () => {
     const near = nearestBranch(branches, { lat: 37.5799, lng: 126.8899 });
     expect(near?.branch.code).toBe("HO1");
     expect(near!.distance).toBeLessThan(300);
+  });
+});
+
+describe("차량 모드", () => {
+  it("도보는 반경 1km 안만, 차량은 차로 N분 안", async () => {
+    const { applyFilters, DEFAULT_FILTERS } = await import("../src/lib/filters");
+    const mk = (id: string, distance: number) =>
+      ({ id, name: id, distance, walkMin: Math.round((distance * 1.25) / 70), lunch: "open", category: "korean", categoryPath: "", ai: null, naver: null }) as unknown as Place;
+    const places = [mk("가까움", 300), mk("1.5km", 1500), mk("3.5km", 3500)];
+    const ctx = { today: "2026-11-20", baselineDate: null };
+    expect(applyFilters(places, { ...DEFAULT_FILTERS, walk: 0 }, ctx).map((p) => p.id)).toEqual(["가까움"]);
+    expect(applyFilters(places, { ...DEFAULT_FILTERS, mode: "drive", drive: 15 }, ctx).map((p) => p.id)).toEqual(["가까움", "1.5km"]);
+    expect(applyFilters(places, { ...DEFAULT_FILTERS, mode: "drive", drive: 0 }, ctx)).toHaveLength(3);
+  });
+
+  it("차로 걸리는 시간과 반경은 서로 맞는다", async () => {
+    const { driveMinutes, radiusForDrive } = await import("../shared/geo");
+    for (const m of [10, 15, 20]) expect(driveMinutes(radiusForDrive(m))).toBeLessThanOrEqual(m);
   });
 });

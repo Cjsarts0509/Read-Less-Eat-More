@@ -34,7 +34,14 @@ describe("점심 소요 시간", () => {
       category: "korean",
       ai: { pace: "fast", waiting: { level: "short", bestTime: null, note: null } } as Place["ai"],
     });
-    expect(t).toEqual({ walk: 12, meal: 20, wait: 10, total: 42 });
+    expect(t).toEqual({ walk: 12, mode: "walk", meal: 20, wait: 10, total: 42 });
+  });
+
+  it("차량 모드는 왕복 차 시간으로", () => {
+    const t = estimateLunchTime({ walkMin: 40, distance: 3000, category: "korean", ai: null }, "drive");
+    // 3km × 1.4 ÷ 366.7m/분 ≈ 11.45 → 11분 + 출발 · 주차 4분 = 15분, 왕복 30분
+    expect(t.walk).toBe(30);
+    expect(t.mode).toBe("drive");
   });
 
   it("정보가 없으면 분류 기본값", () => {

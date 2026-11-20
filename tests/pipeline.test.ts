@@ -553,3 +553,28 @@ describe("네이버 검색 글 수 제한", () => {
     resetNaverMode();
   });
 });
+
+describe("차량 모드 수집", () => {
+  it("도보 반경 밖 「맛집」 검색 결과를 더하고, 최근 본 곳은 남긴다", async () => {
+    const near = kakaoDoc("n1", "가까운집", 0.001);
+    const far = { ...kakaoDoc("f1", "먼맛집", 0.02), distance: "2000" };
+    const prevFar = {
+      ...toPlace({ ...kakaoDoc("f0", "어제맛집", 0.025) }, branch, undefined, "2026-11-01"),
+      lastSeen: "2026-11-10",
+    };
+    const old = { ...toPlace(kakaoDoc("f9", "오래전맛집", 0.025), branch, undefined, "2026-09-01"), lastSeen: "2026-09-01" };
+    const deps: Deps = {
+      today: "2026-11-20",
+      nowIso: "",
+      kakao: async () => [near],
+      kakaoDrive: async () => [near, far],
+      naver: null,
+      google: null,
+      analyzer: null,
+    };
+    const prev: BranchPlaces = { branch: "001", generatedAt: "", radius: 1000, sources: [], places: [prevFar, old] };
+    const { data } = await collectBranch(branch, prev, DEFAULT_CONFIG, deps, { naver: 0, google: 0, ai: 0 });
+    expect(data.places.map((p) => p.id)).toEqual(["n1", "f1", "f0"]);
+    expect(data.places.find((p) => p.id === "f1")!.lastSeen).toBe("2026-11-20");
+  });
+});

@@ -1,5 +1,6 @@
 import { CATEGORY_BY_KEY } from "../../shared/categories";
 import { BADGE_META, closureOf, CLOSURE_LABEL, isNewlyListed, LUNCH_LABEL } from "../../shared/insights";
+import { driveMinutes } from "../../shared/geo";
 import { estimateLunchTime } from "../../shared/time";
 import type { Place } from "../../shared/types";
 import { PRICE_SOURCE_LABEL } from "../../shared/price";
@@ -96,6 +97,23 @@ export function InhouseChip({ place, ctx }: { place: Place; ctx: Ctx }) {
   );
 }
 
+/** 이동 표시: 도보 N분 · 거리, 차량 모드면 차로 N분 */
+export function TravelLine({ place, ctx }: { place: Place; ctx: Ctx }) {
+  const km = place.distance >= 1000 ? `${(place.distance / 1000).toFixed(1)}km` : `${fmt.format(place.distance)}m`;
+  if (ctx.mode === "drive") {
+    return (
+      <span className="muted" title="도로 우회 · 점심시간 도심 속도 · 주차를 넣은 어림">
+        🚗 차로 약 {driveMinutes(place.distance)}분 · {km}
+      </span>
+    );
+  }
+  return (
+    <span className="muted">
+      🚶 도보 {place.walkMin}분 · {km}
+    </span>
+  );
+}
+
 /** 블로그 리뷰 수 */
 export function BlogCount({ place }: { place: Place }) {
   const n = place.naver;
@@ -122,7 +140,7 @@ interface Props {
  */
 export function PlaceCard({ place, ctx, highlighted, onOpen }: Props) {
   const cat = CATEGORY_BY_KEY[place.category];
-  const t = estimateLunchTime(place);
+  const t = estimateLunchTime(place, ctx.mode);
   const posts = place.naver?.posts.slice(0, 2) ?? [];
   const open = () => onOpen(place.id);
   return (
@@ -144,7 +162,7 @@ export function PlaceCard({ place, ctx, highlighted, onOpen }: Props) {
         <span className="card__cat" style={{ "--cat": cat.color } as React.CSSProperties}>
           {cat.emoji} {place.categoryPath.split(" > ").slice(-1)[0] || cat.label}
         </span>
-        <span className="card__trip" title={`왕복 걷기 ${t.walk}분 + 식사 ${t.meal}분 + 웨이팅 ${t.wait}분`}>
+        <span className="card__trip" title={`왕복 ${t.mode === "drive" ? "차" : "걷기"} ${t.walk}분 + 식사 ${t.meal}분 + 웨이팅 ${t.wait}분`}>
           ⏱ 다녀오기 {t.total}분
         </span>
       </header>
@@ -158,9 +176,7 @@ export function PlaceCard({ place, ctx, highlighted, onOpen }: Props) {
 
       <p className="card__meta">
         <BlogCount place={place} />
-        <span className="muted">
-          🚶 도보 {place.walkMin}분 · {fmt.format(place.distance)}m
-        </span>
+        <TravelLine place={place} ctx={ctx} />
       </p>
 
       {posts.length > 0 && (

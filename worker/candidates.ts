@@ -1,11 +1,14 @@
 import { adRatioOf, placeBadges, BADGE_META, closureOf, CLOSURE_LABEL, isLunchFriendly, LUNCH_LABEL } from "../shared/insights";
+import { driveMinutes, WALK_RADIUS_M } from "../shared/geo";
 import { estimateLunchTime } from "../shared/time";
 import type { Place } from "../shared/types";
 
 /** Claude 에게 넘기는 후보 한 줄 */
 export function describeCandidate(p: Place, today: string): string {
-  const t = estimateLunchTime(p);
-  const parts = [`id=${p.id}`, p.name, p.categoryPath, `도보 ${p.walkMin}분`, `왕복+식사 약 ${t.total}분`];
+  const far = p.distance > WALK_RADIUS_M;
+  const t = estimateLunchTime(p, far ? "drive" : "walk");
+  const reach = far ? `차로 약 ${driveMinutes(p.distance)}분` : `도보 ${p.walkMin}분`;
+  const parts = [`id=${p.id}`, p.name, p.categoryPath, reach, `왕복+식사 약 ${t.total}분`];
   if (p.ai?.summary) parts.push(p.ai.summary);
   if (p.ai?.signatureMenus.length) parts.push(`메뉴: ${p.ai.signatureMenus.join(", ")}`);
   if (p.ai?.priceHint) parts.push(`가격: ${p.ai.priceHint}`);

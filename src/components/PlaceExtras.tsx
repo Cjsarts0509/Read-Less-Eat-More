@@ -23,13 +23,13 @@ export function ClosureNotice({ place, ctx }: { place: Place; ctx: Ctx }) {
 }
 
 /** 소요 시간 · 웨이팅 · 가격 변동 · 광고성 리뷰 */
-export function PlaceSignals({ place }: { place: Place }) {
-  const t = estimateLunchTime(place);
+export function PlaceSignals({ place, mode = "walk" }: { place: Place; mode?: "walk" | "drive" }) {
+  const t = estimateLunchTime(place, mode);
   const w = place.ai?.waiting;
   const ad = adRatioOf(place);
   return (
     <ul className="signals">
-      <li title={`왕복 ${t.walk}분 + 식사 ${t.meal}분 + 웨이팅 ${t.wait}분`}>
+      <li title={`왕복 ${t.mode === "drive" ? "차" : "걷기"} ${t.walk}분 + 식사 ${t.meal}분 + 웨이팅 ${t.wait}분`}>
         ⏱ 다녀오는 데 약 <b>{t.total}분</b>
       </li>
       {w && w.level !== "unknown" && (

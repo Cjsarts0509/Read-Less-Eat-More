@@ -1,3 +1,4 @@
+import { travelText } from "../../shared/geo";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CATEGORY_BY_KEY } from "../../shared/categories";
 import type { Branch, Place } from "../../shared/types";
@@ -250,7 +251,7 @@ export function RoomPage({ code, branches, onToast }: Props) {
               <h4 className="revealed__title">《{bookTitleOf(decided)}》</h4>
               <p className="diner__name">{decided.name}</p>
               <p className="muted">
-                {decided.categoryPath} · 도보 {decided.walkMin}분
+                {decided.categoryPath} · {travelText(decided)}
               </p>
               <div className="revealed__links">
                 <a className="bbtn bbtn--naver" href={naverMapUrl(decided)} target="_blank" rel="noreferrer">
@@ -278,7 +279,7 @@ export function RoomPage({ code, branches, onToast }: Props) {
                       <span className="cand__cat">{p ? `${CATEGORY_BY_KEY[p.category].emoji} ${p.categoryPath}` : ""}</span>
                       <b className="cand__title">《{p ? bookTitleOf(p) : c.id}》</b>
                       <span>{p?.name}</span>
-                      {p && <span className="muted">도보 {p.walkMin}분</span>}
+                      {p && <span className="muted">{travelText(p)}</span>}
                     </div>
                     <div className="cand__body">
                       <p>{c.reason}</p>

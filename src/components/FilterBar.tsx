@@ -17,6 +17,13 @@ const BUDGET_WON = [
   { v: 15000, label: "1.5만원" },
 ];
 
+const DRIVES = [
+  { v: 10, label: "10분" },
+  { v: 15, label: "15분" },
+  { v: 20, label: "20분" },
+  { v: 0, label: "전체" },
+];
+
 const WALKS = [
   { v: 5, label: "5분" },
   { v: 10, label: "10분" },
@@ -70,9 +77,35 @@ export function FilterBar({ filters, onChange }: Props) {
   return (
     <div className="fbox">
       <div className="frow">
-        <span className="frow__label">🚶 도보</span>
-        <Segmented label="도보 거리" value={filters.walk} options={WALKS} onPick={(v) => set("walk", v)} />
+        <span className="frow__label">이동</span>
+        <div className="seg2" role="radiogroup" aria-label="이동 방법" style={{ "--n": 2 } as React.CSSProperties}>
+          {(["walk", "drive"] as const).map((m) => (
+            <button
+              type="button"
+              key={m}
+              role="radio"
+              aria-checked={filters.mode === m}
+              className={`seg2__btn${filters.mode === m ? " seg2__btn--on" : ""}`}
+              onClick={() => set("mode", m)}
+            >
+              {m === "walk" ? "🚶 도보" : "🚗 차량"}
+            </button>
+          ))}
+        </div>
       </div>
+      {filters.mode === "walk" ? (
+        <div className="frow">
+          <span className="frow__label">🚶 도보</span>
+          <Segmented label="도보 거리" value={filters.walk} options={WALKS} onPick={(v) => set("walk", v)} />
+        </div>
+      ) : (
+        <div className="frow">
+          <span className="frow__label" title="도로 우회 · 점심시간 도심 속도 · 주차를 넣은 어림">
+            🚗 차로
+          </span>
+          <Segmented label="차로 걸리는 시간" value={filters.drive} options={DRIVES} onPick={(v) => set("drive", v)} />
+        </div>
+      )}
       <div className="frow">
         <span className="frow__label" title="왕복 걷는 시간 + 식사 + 웨이팅">
           ⏱ 점심시간

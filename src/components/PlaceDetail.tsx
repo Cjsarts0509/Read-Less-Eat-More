@@ -10,7 +10,7 @@ import { bookTitleOf } from "../lib/booktitle";
 import { priceOf, type Ctx } from "../lib/filters";
 import { kakaoPlaceUrl, naverMapUrl } from "../lib/links";
 import { InhouseReviews } from "./InhouseReviews";
-import { Badges, BlogCount, InhouseChip, LunchLine, PlaceLinks, PriceChip } from "./PlaceCard";
+import { Badges, BlogCount, InhouseChip, LunchLine, PlaceLinks, PriceChip, TravelLine } from "./PlaceCard";
 import { ClosureNotice, HoursLine, MenuReports, PlaceSignals, WebInfoBox } from "./PlaceExtras";
 
 const won = (n: number) => `${n.toLocaleString("ko-KR")}원`;
@@ -231,6 +231,7 @@ export function PlaceDetail({ place: base, ctx, branch, menus, upload, live, can
           <p className="card__chips">
             <PriceChip place={place} ctx={ctx} showUnknown />
             <InhouseChip place={place} ctx={ctx} />
+            <TravelLine place={place} ctx={ctx} />
             {priceOf(place, ctx) && <span className="muted">({PRICE_SOURCE_LABEL[priceOf(place, ctx)!.source]} 기준)</span>}
           </p>
           {ai?.summary && <p className="card__summary">“{ai.summary}”</p>}
@@ -269,7 +270,7 @@ export function PlaceDetail({ place: base, ctx, branch, menus, upload, live, can
           <LunchLine place={place} />
           <HoursLine place={place} ctx={ctx} />
           {ai?.lunchNote && place.lunchReason !== ai.lunchNote && <p className="card__note">💡 {ai.lunchNote}</p>}
-          <PlaceSignals place={place} />
+          <PlaceSignals place={place} mode={ctx.mode} />
 
           {live && !place.id.startsWith("demo-") && <LiveCheck place={base} branch={branch} ctx={ctx} onFound={setFound} />}
           {!found && <WebInfoBox place={place} />}

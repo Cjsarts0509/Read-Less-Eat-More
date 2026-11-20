@@ -2,7 +2,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useEffect, useRef } from "react";
 import { CATEGORY_BY_KEY } from "../../shared/categories";
-import { radiusForWalk } from "../../shared/geo";
+import { driveMinutes } from "../../shared/geo";
 import type { Branch, Place } from "../../shared/types";
 
 interface Props {
@@ -11,7 +11,10 @@ interface Props {
   branches: Branch[];
   selected: Branch | null;
   places: Place[];
-  walk: number;
+  /** 점선 원 반경 (m, 0 이면 없음) */
+  radius: number;
+  /** 차량 모드면 팝업에 차로 걸리는 시간 */
+  drive?: boolean;
   /** n 은 같은 가게를 다시 눌러도 이동하도록 바꾸는 값 */
   focus: { id: string; n: number } | null;
   onSelectBranch: (code: string | null) => void;
@@ -32,7 +35,7 @@ function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 }
 
-export function BranchMap({ mode, branches, selected, places, walk, focus, onSelectBranch, onShowCard }: Props) {
+export function BranchMap({ mode, branches, selected, places, radius, drive = false, focus, onSelectBranch, onShowCard }: Props) {
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<L.Map | null>(null);
   const branchLayer = useRef<L.LayerGroup | null>(null);
@@ -92,11 +95,12 @@ export function BranchMap({ mode, branches, selected, places, walk, focus, onSel
     const m = map.current;
     if (!m) return;
     if (mode === "area" && selected) {
-      m.flyTo([selected.lat, selected.lng], walk && walk <= 5 ? 17 : 16, { duration: 0.8 });
+      const zoom = radius && radius <= 300 ? 17 : radius > 2500 ? 14 : radius > 1200 ? 15 : 16;
+      m.flyTo([selected.lat, selected.lng], zoom, { duration: 0.8 });
     } else if (branches.length) {
       m.fitBounds(L.latLngBounds(branches.map((b) => [b.lat, b.lng] as [number, number])), { padding: [24, 24] });
     }
-  }, [mode, selected, branches, walk]);
+  }, [mode, selected, branches, radius]);
 
   // 식당 점과 도보 반경
   useEffect(() => {
@@ -105,9 +109,9 @@ export function BranchMap({ mode, branches, selected, places, walk, focus, onSel
     layer.clearLayers();
     markers.current.clear();
     if (!selected || mode !== "area") return;
-    if (walk > 0) {
+    if (radius > 0) {
       L.circle([selected.lat, selected.lng], {
-        radius: radiusForWalk(walk),
+        radius,
         color: cssVar("--green", "#005B41"),
         weight: 1.5,
         dashArray: "4 6",
@@ -127,14 +131,14 @@ export function BranchMap({ mode, branches, selected, places, walk, focus, onSel
         .bindPopup(
           `<div class="pop"><div class="pop__cat">${cat.emoji} ${escapeHtml(p.categoryPath)}</div>` +
             `<strong class="pop__name">${escapeHtml(p.name)}</strong>` +
-            `<div class="pop__meta">도보 ${p.walkMin}분 · ${p.distance}m</div>` +
+            `<div class="pop__meta">${drive ? `차로 약 ${driveMinutes(p.distance)}분` : `도보 ${p.walkMin}분`} · ${p.distance}m</div>` +
             `<button type="button" class="pop__btn" data-show-card="${escapeHtml(p.id)}">카드 보기</button></div>`,
           { closeButton: false, offset: [0, -2] },
         )
         .addTo(layer);
       markers.current.set(p.id, mk);
     }
-  }, [mode, places, selected, walk]);
+  }, [mode, places, selected, radius, drive]);
 
   // 카드에서 '지도에서 보기'
   useEffect(() => {

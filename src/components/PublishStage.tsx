@@ -2,6 +2,7 @@ import confetti from "canvas-confetti";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CATEGORY_BY_KEY } from "../../shared/categories";
 import type { WeatherResponse } from "../../shared/api";
+import { travelText } from "../../shared/geo";
 import { BADGE_META, closureOf, daysBetween, isLunchFriendly } from "../../shared/insights";
 import type { Branch, Place } from "../../shared/types";
 import { bookTitleOf, isbnOf } from "../lib/booktitle";
@@ -446,7 +447,7 @@ export function PublishStage({ branch, pool: rawPool, allPlaces, ctx, poolDesc, 
                   <span className="badge-navy">
                     {CATEGORY_BY_KEY[result.category].emoji} {result.categoryPath || CATEGORY_BY_KEY[result.category].label}
                   </span>
-                  <span className="badge-mustard">🚶 도보 {result.walkMin}분</span>
+                  <span className="badge-mustard">{travelText(result)}</span>
                 </div>
                 <p className="revealed__edition">
                   {branch.label} 서가 · {rerolls === 0 ? "초판 1쇄 발행" : `개정 ${rerolls}판 발행`}

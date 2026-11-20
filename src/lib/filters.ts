@@ -1,7 +1,8 @@
 import type { MenuReport, ReviewSummary } from "../../shared/api";
 import { isLunchFriendly, isNewlyListed, placeBadges } from "../../shared/insights";
 import { lunchPrice } from "../../shared/price";
-import { estimateLunchTime } from "../../shared/time";
+import { driveMinutes, WALK_RADIUS_M } from "../../shared/geo";
+import { estimateLunchTime, type TravelMode } from "../../shared/time";
 import type { BadgeType, CategoryKey, Place } from "../../shared/types";
 
 export type SortKey = "distance" | "popular" | "buzz" | "inhouse" | "cheap" | "rating" | "news";
@@ -25,7 +26,11 @@ export const NEWS_FILTERS: Array<{ key: NewsFilter; label: string; types: BadgeT
 ];
 
 export interface Filters {
+  /** 이동 방법: 도보(반경 1km) · 차량(반경 4km) */
+  mode: TravelMode;
   walk: number; // 분, 0 = 전체
+  /** 차량 모드: 차로 N분 안 (0 = 전체) */
+  drive: number;
   /** 점심시간 한도 (왕복 + 식사 + 웨이팅, 분). 0 = 제한 없음 */
   timeBudget: number;
   lunchOnly: boolean;
@@ -36,7 +41,7 @@ export interface Filters {
   budget: number;
 }
 
-export const DEFAULT_FILTERS: Filters = { walk: 10, timeBudget: 0, lunchOnly: true, sort: "distance", query: "", news: [], budget: 0 };
+export const DEFAULT_FILTERS: Filters = { mode: "walk", walk: 10, drive: 15, timeBudget: 0, lunchOnly: true, sort: "distance", query: "", news: [], budget: 0 };
 
 export interface Ctx {
   today: string;
@@ -47,6 +52,14 @@ export interface Ctx {
   menus?: Record<string, MenuReport[]>;
   /** 1인 예산 (카드에 '한도 안/넘음' 표시) */
   budget?: number;
+  /** 이동 방법 (카드의 이동 시간 표시) */
+  mode?: TravelMode;
+}
+
+/** 이동 조건에 맞는가: 도보는 반경 1km 안에서 N분, 차량은 차로 N분 */
+export function withinReach(p: Place, f: Pick<Filters, "mode" | "walk" | "drive">): boolean {
+  if (f.mode === "drive") return !f.drive || driveMinutes(p.distance) <= f.drive;
+  return p.distance <= WALK_RADIUS_M && (f.walk === 0 || p.walkMin <= f.walk);
 }
 
 export function priceOf(p: Place, ctx: Ctx) {
@@ -102,8 +115,8 @@ function matchesQuery(p: Place, q: string): boolean {
 export function applyFilters(places: Place[], f: Filters, ctx: Ctx): Place[] {
   return places.filter(
     (p) =>
-      (f.walk === 0 || p.walkMin <= f.walk) &&
-      (!f.timeBudget || estimateLunchTime(p).total <= f.timeBudget) &&
+      withinReach(p, f) &&
+      (!f.timeBudget || estimateLunchTime(p, f.mode).total <= f.timeBudget) &&
       (!f.lunchOnly || isLunchFriendly(p.lunch)) &&
       (!f.budget || (priceOf(p, ctx)?.price ?? 0) <= f.budget) &&
       matchesNews(p, f.news, ctx) &&

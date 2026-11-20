@@ -14,6 +14,7 @@
  *   AI_MAX_PLACES_PER_RUN (300) · AI_BATCH_SIZE (8) · GOOGLE_MAX_PER_BRANCH (0) · GOOGLE_REFRESH_DAYS (30)
  *   WEB_SEARCH_MAX_PER_RUN (20) — 가까운 가게의 영업시간 · 휴무 · 배달 전용 여부를 Claude 웹 검색으로 조사 (0 이면 끔)
  *   WEB_MODEL               웹 조사에 쓸 모델 (CLAUDE_MODEL 과 같음)
+ *   DRIVE_RADIUS_M (4000) · MAX_DRIVE_PLACES (150) — 차량 모드용으로 도보 반경 밖 「맛집」 검색 결과를 더 모은다 (0 이면 끔)
  */
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -22,7 +23,7 @@ import type { Branch, BranchPlaces, DataIndex } from "../shared/types";
 import { collectBranch, DEFAULT_CONFIG, serializeBranchPlaces, type Budget, type CollectConfig, type Deps } from "./core";
 import { createClaudeAnalyzer } from "./sources/claude";
 import { lookupGoogle } from "./sources/google";
-import { collectNearby, geocodeAddress } from "./sources/kakao";
+import { collectNearby, geocodeAddress, searchKeywordPlaces } from "./sources/kakao";
 import { searchBlog } from "./sources/naver";
 import { createWebSearcher } from "./sources/websearch";
 
@@ -68,6 +69,8 @@ async function main() {
     googleMaxPerBranch: googleKey ? envInt("GOOGLE_MAX_PER_BRANCH", 0) : 0,
     googleRefreshDays: envInt("GOOGLE_REFRESH_DAYS", DEFAULT_CONFIG.googleRefreshDays),
     aiBatchSize: Math.max(1, envInt("AI_BATCH_SIZE", DEFAULT_CONFIG.aiBatchSize)),
+    driveRadius: envInt("DRIVE_RADIUS_M", DEFAULT_CONFIG.driveRadius),
+    maxDrivePlaces: envInt("MAX_DRIVE_PLACES", DEFAULT_CONFIG.maxDrivePlaces),
   };
 
   const now = new Date();
@@ -83,6 +86,8 @@ async function main() {
     nowIso: now.toISOString(),
     kakao: (b) =>
       collectNearby({ apiKey: kakaoKey, center: { lat: b.lat, lng: b.lng }, radius: cfg.radius, onRequest: () => kakaoCalls++ }),
+    kakaoDrive: (b, radius) =>
+      searchKeywordPlaces({ apiKey: kakaoKey, center: { lat: b.lat, lng: b.lng }, radius, onRequest: () => kakaoCalls++ }),
     naver: naverId && naverSecret ? (q, o) => searchBlog(q, { clientId: naverId, clientSecret: naverSecret }, fetch, o) : null,
     google: googleKey ? (p) => lookupGoogle(p, googleKey, today) : null,
     analyzer: anthropicKey ? createClaudeAnalyzer({ apiKey: anthropicKey, model: process.env.CLAUDE_MODEL }) : null,

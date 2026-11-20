@@ -29,6 +29,23 @@ export function radiusForWalk(minutes: number): number {
   return Math.round((minutes * WALK_METERS_PER_MIN) / DETOUR_FACTOR);
 }
 
+/** 걸어서 갈 만한 곳으로 보는 직선거리 (m). 이보다 먼 곳은 차량 모드에서만 보인다 */
+export const WALK_RADIUS_M = 1000;
+
+/** 차: 도로 우회 1.4배, 점심시간 도심 평균 22km/h, 출발 · 주차에 4분 */
+export const DRIVE_DETOUR = 1.4;
+export const DRIVE_METERS_PER_MIN = 22000 / 60;
+export const DRIVE_OVERHEAD_MIN = 4;
+
+export function driveMinutes(distanceM: number): number {
+  return Math.max(3, Math.round((distanceM * DRIVE_DETOUR) / DRIVE_METERS_PER_MIN) + DRIVE_OVERHEAD_MIN);
+}
+
+/** 차로 N분 안에 들어오는 최대 직선거리 (m) */
+export function radiusForDrive(minutes: number): number {
+  return Math.max(0, Math.round(((minutes - DRIVE_OVERHEAD_MIN) * DRIVE_METERS_PER_MIN) / DRIVE_DETOUR));
+}
+
 export interface Rect {
   west: number;
   south: number;
@@ -75,4 +92,9 @@ export function nearestBranch<B extends { lat: number; lng: number }>(branches: 
     if (!best || d < best.distance) best = { branch: b, distance: Math.round(d) };
   }
   return best;
+}
+
+/** 이동 한 줄: 도보 반경 안이면 도보 N분, 밖이면 차로 약 N분 */
+export function travelText(p: { distance: number; walkMin: number }): string {
+  return p.distance > WALK_RADIUS_M ? `🚗 차로 약 ${driveMinutes(p.distance)}분` : `🚶 도보 ${p.walkMin}분`;
 }

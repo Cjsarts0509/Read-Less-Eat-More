@@ -1,3 +1,4 @@
+import { travelText } from "../../shared/geo";
 import { useEffect, useRef, useState } from "react";
 import type { Branch, Place } from "../../shared/types";
 import { sendChat, type ChatMessage, type ChatReply } from "../lib/api";
@@ -102,7 +103,7 @@ export function LibrarianChat({ branch, candidates, weatherText, timeBudget, onS
                     <li key={pk.id}>
                       <button type="button" className="chat__pick" onClick={() => onShowOnMap(p.id)}>
                         <span className="chat__pick-title">《{bookTitleOf(p)}》</span>
-                        <b>{p.name}</b> <span className="muted">· 도보 {p.walkMin}분</span>
+                        <b>{p.name}</b> <span className="muted">· {travelText(p)}</span>
                       </button>
                       <p>{pk.reason}</p>
                     </li>

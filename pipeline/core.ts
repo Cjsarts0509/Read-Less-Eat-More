@@ -47,6 +47,12 @@ export interface CollectConfig {
   hoursRefreshDays: number;
   /** 웹 조사 대상: 이 도보 시간(분) 안의 가게 */
   webMaxWalkMin: number;
+  /** 차량 모드: 이 반경(m) 안에서 「맛집」 검색으로 더 모은다 (0 이면 끔) */
+  driveRadius: number;
+  /** 차량 모드로 더 모을 최대 곳 수 */
+  maxDrivePlaces: number;
+  /** 검색에서 이 일수 넘게 안 보인 차량 모드 가게는 뺀다 */
+  driveKeepDays: number;
 }
 
 export const DEFAULT_CONFIG: CollectConfig = {
@@ -61,12 +67,17 @@ export const DEFAULT_CONFIG: CollectConfig = {
   webRefreshDays: 45,
   hoursRefreshDays: 30,
   webMaxWalkMin: 12,
+  driveRadius: 4000,
+  maxDrivePlaces: 150,
+  driveKeepDays: 30,
 };
 
 export interface Deps {
   today: string;
   nowIso: string;
   kakao: (branch: Branch) => Promise<KakaoPlace[]>;
+  /** 차량 모드: 반경 안 「맛집」 낱말 검색 (정확도순) */
+  kakaoDrive?: ((branch: Branch, radius: number) => Promise<KakaoPlace[]>) | null;
   naver: ((query: string, opts?: SearchOptions) => Promise<BlogSearchResult>) | null;
   google: ((place: Place) => Promise<GoogleInfo | null>) | null;
   analyzer: Analyzer | null;
@@ -126,6 +137,7 @@ export function toPlace(doc: KakaoPlace, branch: Branch, prev: Place | undefined
     walkMin: walkMinutes(distance),
     kakaoUrl: doc.place_url,
     firstSeen: prev?.firstSeen ?? today,
+    lastSeen: prev?.lastSeen,
     naver: prev?.naver ?? null,
     google: prev?.google ?? null,
     ai: prev?.ai ?? null,
@@ -176,6 +188,28 @@ export async function collectBranch(
     .filter((p) => Number.isFinite(p.distance) && p.distance <= cfg.radius)
     .sort((a, b) => a.distance - b.distance)
     .slice(0, cfg.maxPlaces);
+
+  // 1-2) 차량 모드: 도보 반경 밖 「맛집」 검색 결과 (정확도순). 오늘 안 잡혔어도 최근 본 곳은 남긴다
+  if (deps.kakaoDrive && cfg.driveRadius > cfg.radius && cfg.maxDrivePlaces > 0) {
+    const walkIds = new Set(places.map((p) => p.id));
+    const driveDocs = await deps.kakaoDrive(branch, cfg.driveRadius);
+    stats.kakao += driveDocs.length;
+    const fresh = driveDocs
+      .filter((d) => !walkIds.has(d.id))
+      .map((d) => ({ ...toPlace(d, branch, prevMap.get(d.id), today), lastSeen: today }))
+      .filter((p) => p.distance > cfg.radius && p.distance <= cfg.driveRadius);
+    const freshIds = new Set(fresh.map((p) => p.id));
+    const kept = (prev?.places ?? []).filter(
+      (p) =>
+        !walkIds.has(p.id) &&
+        !freshIds.has(p.id) &&
+        p.distance > cfg.radius &&
+        p.distance <= cfg.driveRadius &&
+        p.lastSeen &&
+        daysBetween(p.lastSeen, today) <= cfg.driveKeepDays,
+    );
+    places = [...places, ...[...fresh, ...kept].slice(0, cfg.maxDrivePlaces)];
+  }
 
   // 2) 네이버 블로그: 오래된 것부터 갱신 (AI 대기 중인 곳 우선)
   const freshPosts = new Map<string, BlogSearchResult["posts"]>();
