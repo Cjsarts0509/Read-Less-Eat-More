@@ -139,6 +139,7 @@ export function App() {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [shelfView, setShelfView] = useState<ShelfView>("list");
   const [chatOpen, setChatOpen] = useState(false);
+  const [funOpen, setFunOpen] = useState(false);
   const wide = useMedia("(min-width: 1180px)");
   const touch = useRef<{ x: number; y: number; ok: boolean } | null>(null);
 
@@ -469,6 +470,24 @@ export function App() {
     </nav>
   );
 
+  const funCorner = (
+    <FunCorner
+      today={today}
+      canVote={config.store && !DEMO}
+      onToast={showToast}
+      onLuckyGenre={
+        selected && places.status === "ready"
+          ? (k) => {
+              setTab(k);
+              setFunOpen(false);
+              go(3);
+              showToast(`오늘의 행운 장르 「${CATEGORY_BY_KEY[k].label}」로 편찬해요`, "🥠");
+            }
+          : null
+      }
+    />
+  );
+
   return (
     <div className={`app${oneHand ? " app--onehand" : ""}${ROOM ? "" : " app--paged"}`}>
       <Marquee />
@@ -499,6 +518,9 @@ export function App() {
                 >
                   {sound ? "🔊" : "🔇"}
                 </button>
+                <button type="button" className="fun-open" onClick={() => setFunOpen(true)}>
+                  🥠 운세 · 밸런스
+                </button>
               </div>
               <h1 className="hero__title">
                 점심은 <mark>사람을</mark> 만든다
@@ -506,20 +528,7 @@ export function App() {
               <p className="hero__lead">사람은 책을 만들고, 점심은 사람을 만든다. 오늘 근무하는 지점에서 12시의 필독 메뉴를 편찬하세요.</p>
             </div>
 
-            <FunCorner
-              today={today}
-              canVote={config.store && !DEMO}
-              onToast={showToast}
-              onLuckyGenre={
-                selected && places.status === "ready"
-                  ? (k) => {
-                      setTab(k);
-                      go(3);
-                      showToast(`오늘의 행운 장르 「${CATEGORY_BY_KEY[k].label}」로 편찬해요`, "🥠");
-                    }
-                  : null
-              }
-            />
+            <div className="hero__fun">{funCorner}</div>
 
             <div className="stock" aria-live="polite">
               <div className="stock__head">
@@ -831,6 +840,22 @@ export function App() {
             </div>
           )}
         </>
+      )}
+
+      {/* 휴대폰: 심심풀이는 시트로 */}
+      {funOpen && (
+        <div className="sheet-backdrop" onClick={() => setFunOpen(false)}>
+          <div className="sheet sheet--fun no-swipe" role="dialog" aria-modal="true" aria-label="심심풀이" onClick={(e) => e.stopPropagation()}>
+            <div className="sheet__grip" aria-hidden />
+            <header className="sheet__head">
+              <h2 className="sheet__title">🥠 심심풀이</h2>
+              <button type="button" className="sheet__close" onClick={() => setFunOpen(false)} aria-label="닫기">
+                ✕
+              </button>
+            </header>
+            <div className="sheet__body">{funCorner}</div>
+          </div>
+        </div>
       )}
 
       {detailPlace && selected && (
