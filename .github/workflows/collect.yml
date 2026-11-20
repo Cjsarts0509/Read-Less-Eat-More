@@ -1,0 +1,86 @@
+name: 식당 데이터 수집
+
+# 평일 아침 6시 40분(한국 시간)에 지점 주변 식당을 모으고, 바뀐 데이터를 커밋한 뒤 배포한다.
+on:
+  schedule:
+    - cron: "40 21 * * 0-4" # UTC 일~목 21:40 = KST 월~금 06:40
+  workflow_dispatch:
+    inputs:
+      branches:
+        description: "지점 코드 (쉼표로 구분, 비우면 전체. 예: 001,015)"
+        required: false
+        default: ""
+      ai_budget:
+        description: "이번 실행에서 Claude 로 분석할 최대 식당 수"
+        required: false
+        default: "300"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: collect
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      HAS_KAKAO: ${{ secrets.KAKAO_REST_API_KEY != '' }}
+    outputs:
+      changed: ${{ steps.commit.outputs.changed }}
+    steps:
+      - name: 키 확인
+        if: env.HAS_KAKAO != 'true'
+        run: echo "::warning::KAKAO_REST_API_KEY 시크릿이 없어 수집을 건너뜁니다. README 의 'API 키 준비' 를 참고하세요."
+
+      - uses: actions/checkout@v4
+        if: env.HAS_KAKAO == 'true'
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        if: env.HAS_KAKAO == 'true'
+        with:
+          node-version: 22
+          cache: npm
+      - if: env.HAS_KAKAO == 'true'
+        run: npm ci
+
+      - name: 수집
+        if: env.HAS_KAKAO == 'true'
+        run: npm run collect
+        env:
+          KAKAO_REST_API_KEY: ${{ secrets.KAKAO_REST_API_KEY }}
+          NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
+          NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
+          CLAUDE_MODEL: ${{ vars.CLAUDE_MODEL }}
+          RADIUS_M: ${{ vars.RADIUS_M }}
+          MAX_PLACES_PER_BRANCH: ${{ vars.MAX_PLACES_PER_BRANCH }}
+          GOOGLE_MAX_PER_BRANCH: ${{ vars.GOOGLE_MAX_PER_BRANCH }}
+          AI_MAX_PLACES_PER_RUN: ${{ inputs.ai_budget || vars.AI_MAX_PLACES_PER_RUN }}
+          BRANCHES: ${{ inputs.branches }}
+
+      - name: 바뀐 데이터 커밋
+        id: commit
+        if: env.HAS_KAKAO == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/data
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git commit -m "data: 식당 데이터 갱신 $(TZ=Asia/Seoul date +%F)"
+          git pull --rebase origin main
+          git push origin HEAD:main
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    needs: collect
+    if: needs.collect.outputs.changed == 'true'
+    uses: ./.github/workflows/deploy.yml
+    secrets: inherit
