@@ -32,6 +32,9 @@ const NAVER_FORMAT = 3;
 const NAVER_DISPLAY = 100;
 import type { Analyzer, InsightInput } from "./sources/claude";
 
+/** 지점마다 네이버 호출 중 영업시간 검색에 남겨 두는 몫 */
+export const HOURS_SHARE = 0.3;
+
 export interface CollectConfig {
   radius: number;
   maxPlaces: number;
@@ -260,9 +263,14 @@ export async function collectBranch(
       .sort((a, b) => {
         const pa = pendingFirst.has(a.id) ? 0 : 1;
         const pb = pendingFirst.has(b.id) ? 0 : 1;
-        return pa - pb || (a.naver?.checkedAt ?? "").localeCompare(b.naver?.checkedAt ?? "");
+        // 걸어갈 수 있는 곳부터 (차로 가는 먼 곳은 뒤로)
+        const wa = a.distance <= cfg.radius ? 0 : 1;
+        const wb = b.distance <= cfg.radius ? 0 : 1;
+        return pa - pb || wa - wb || (a.naver?.checkedAt ?? "").localeCompare(b.naver?.checkedAt ?? "");
       });
-    const targets = stale.slice(0, Math.max(0, budget.naver));
+    // 영업시간 검색 몫을 남겨 둔다 (블로그 갱신이 하루 호출을 다 써 버리지 않게). 남으면 다음 지점으로 넘어간다
+    const hoursReserve = Math.floor(Math.max(0, budget.naver) * HOURS_SHARE);
+    const targets = stale.slice(0, Math.max(0, budget.naver - hoursReserve));
     budget.naver -= targets.length;
     await mapLimit(targets, 4, async (p) => {
       const q = blogQuery(p.name, docs.find((d) => d.id === p.id)?.address_name ?? "", p.address);

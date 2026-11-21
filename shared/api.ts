@@ -60,3 +60,8 @@ export interface BalanceResponse {
   counts: { a: number; b: number };
   mine: "a" | "b" | null;
 }
+
+/** /api/naver-ids — 상세 화면 확인 등으로 알아낸 네이버 지도 가게 번호 (지점별) */
+export interface NaverIdsResponse {
+  ids: Record<string, string>;
+}

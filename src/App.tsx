@@ -15,7 +15,8 @@ import { LibrarianChat } from "./components/LibrarianChat";
 import { PublishStage } from "./components/PublishStage";
 import { RoomPage } from "./components/RoomPage";
 import { WeatherBand } from "./components/WeatherBand";
-import { createRoom, fetchMenus, fetchReviews, fetchWeather } from "./lib/api";
+import { rememberNaverIds } from "./lib/links";
+import { createRoom, fetchMenus, fetchNaverIds, fetchReviews, fetchWeather } from "./lib/api";
 import { loadBranches, loadConfig, loadIndex, loadPlaces, todayKst, type AppConfig } from "./lib/data";
 import {
   applyFilters,
@@ -189,6 +190,22 @@ export function App() {
     }
   }, [selected, config.store]);
   useEffect(refreshMenus, [refreshMenus]);
+  // 다른 사람이 상세 확인으로 찾아 둔 네이버 지도 가게 번호 → 「네이버 지도」가 그 가게로 바로 간다
+  const [, setNaverIdsLoaded] = useState(0);
+  useEffect(() => {
+    if (!selected || !config.store || DEMO) return;
+    let alive = true;
+    void fetchNaverIds(selected.code)
+      .then((r) => {
+        if (!alive) return;
+        rememberNaverIds(r.ids);
+        setNaverIdsLoaded((n) => n + 1);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [selected, config.store]);
   useEffect(() => {
     const { walk, lunchOnly, sort, mode, drive } = filters;
     writeStore("rlem:filters", { v: 2, walk, lunchOnly, sort, mode, drive, budget: filters.budget });

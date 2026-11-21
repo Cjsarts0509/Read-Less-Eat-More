@@ -5,7 +5,7 @@
  * 대신 Claude 웹 검색 도구로 공개된 맛집 정보 페이지와 후기를 찾아 읽는다.
  * 결과는 Supabase 에 가게당 한 줄로 저장해 모두가 함께 쓰고(14일), 하루 확인 수에 한도를 둔다.
  */
-import type { PlaceLiveResponse } from "../shared/api";
+import type { NaverIdsResponse, PlaceLiveResponse } from "../shared/api";
 import { hoursFromWeb } from "../shared/insights";
 import type { WebInfo } from "../shared/types";
 import { createWebSearcher } from "../pipeline/sources/websearch";
@@ -82,4 +82,22 @@ export async function handlePlaceLive(request: Request, env: Env, search?: Searc
   }
   await save(info ? "done" : "notfound", info);
   return reply(info ? "fresh" : "notfound", info, new Date().toISOString());
+}
+
+/**
+ * /api/naver-ids?b=지점 — 실시간 확인에서 찾은 네이버 지도 가게 번호 모음.
+ * 한 사람이 상세를 열어 찾으면, 그 뒤로는 모두의 「네이버 지도」 버튼이 그 가게로 바로 간다.
+ */
+export async function handleNaverIds(request: Request, env: Env): Promise<Response> {
+  const branch = new URL(request.url).searchParams.get("b") ?? "";
+  if (!BRANCH_RE.test(branch)) throw new HttpError(400, "지점을 보내 주세요.");
+  if (!hasSupabase(env)) return json({ ids: {} } satisfies NaverIdsResponse);
+  const rows = await sbSelect<{ place_id: string; nid: string | null }>(
+    env,
+    TABLE,
+    `select=place_id,nid:data->>naverPlaceId&branch_code=eq.${encodeURIComponent(branch)}&status=eq.done&data->>naverPlaceId=not.is.null&limit=5000`,
+  );
+  const ids: Record<string, string> = {};
+  for (const r of rows) if (r.nid && /^\d{4,12}$/.test(r.nid)) ids[r.place_id] = r.nid;
+  return json({ ids } satisfies NaverIdsResponse, 200, { "cache-control": "public, max-age=600" });
 }

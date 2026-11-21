@@ -8,7 +8,7 @@ import type { Place } from "../../shared/types";
 import { fetchPlaceLive } from "../lib/api";
 import { bookTitleOf } from "../lib/booktitle";
 import { priceOf, type Ctx } from "../lib/filters";
-import { kakaoPlaceUrl, naverMapUrl } from "../lib/links";
+import { kakaoPlaceUrl, naverMapUrl, rememberNaverIds } from "../lib/links";
 import { InhouseReviews } from "./InhouseReviews";
 import { Badges, BlogCount, InhouseChip, LunchLine, PlaceLinks, PriceChip, TravelLine } from "./PlaceCard";
 import { ClosureNotice, HoursLine, MenuReports, PlaceSignals, WebInfoBox } from "./PlaceExtras";
@@ -280,7 +280,17 @@ export function PlaceDetail({ place: base, ctx, branch, menus, upload, live, can
           {ai?.lunchNote && place.lunchReason !== ai.lunchNote && <p className="card__note">💡 {ai.lunchNote}</p>}
           <PlaceSignals place={place} mode={ctx.mode} />
 
-          {live && !place.id.startsWith("demo-") && <LiveCheck place={base} branch={branch} ctx={ctx} onFound={setFound} />}
+          {live && !place.id.startsWith("demo-") && (
+            <LiveCheck
+              place={base}
+              branch={branch}
+              ctx={ctx}
+              onFound={(r) => {
+                if (r.info?.naverPlaceId) rememberNaverIds({ [base.id]: r.info.naverPlaceId });
+                setFound(r);
+              }}
+            />
+          )}
           {!found && <WebInfoBox place={place} />}
 
           {(canReview || ctx.reviews?.[place.id]) && (

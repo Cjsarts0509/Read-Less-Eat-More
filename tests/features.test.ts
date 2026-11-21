@@ -173,3 +173,16 @@ describe("ladder", () => {
     }
   });
 });
+
+describe("naverMapUrl", () => {
+  it("가게 번호를 알면 그 가게로, 모르면 가게 좌표에 맞춘 검색으로", async () => {
+    const { naverMapUrl, rememberNaverIds } = await import("../src/lib/links");
+    expect(naverMapUrl({ name: "삼정모밀 상암점", web: { naverPlaceId: "1234567" } as Place["web"] })).toBe(
+      "https://map.naver.com/p/entry/place/1234567",
+    );
+    const url = naverMapUrl({ id: "k1", name: "삼정모밀 상암점", lat: 37.5788, lng: 126.8895 });
+    expect(url).toMatch(/^https:\/\/map\.naver\.com\/p\/search\/%EC%82%BC.+\?c=14125\d{3}\.\d{4},45\d{5}\.\d{4},18,0,0,0,dh$/);
+    rememberNaverIds({ k1: "7654321", bad: "x" });
+    expect(naverMapUrl({ id: "k1", name: "삼정모밀 상암점", lat: 37.5788, lng: 126.8895 })).toBe("https://map.naver.com/p/entry/place/7654321");
+  });
+});
