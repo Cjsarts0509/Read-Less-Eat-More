@@ -23,6 +23,7 @@ import {
   countByCategory,
   DEFAULT_FILTERS,
   HIDDEN_SORTS,
+  NEWS_FILTERS,
   inhouseTop,
   SORT_LABEL,
   sortPlaces,
@@ -122,7 +123,7 @@ export function App() {
     const { v, ...saved } = readStore<Partial<Filters> & { v?: number }>("rlem:filters", {});
     // 기본 정렬을 '요즘 많이 언급되는 순'으로 바꿨으니, 그 전에 저장된 정렬은 버린다
     if (v !== 2 || (saved.sort && HIDDEN_SORTS.includes(saved.sort))) delete saved.sort;
-    return { ...DEFAULT_FILTERS, ...saved, query: "", news: [] };
+    return { ...DEFAULT_FILTERS, ...saved, query: "", news: Array.isArray(saved.news) ? saved.news : [] };
   });
   const [tab, setTab] = useState<CategoryKey | "all">("all");
   const [focus, setFocus] = useState<{ id: string; n: number } | null>(null);
@@ -245,6 +246,11 @@ export function App() {
   const all = useMemo(() => (places.status === "ready" ? places.data.places.filter((p) => !p.deliveryOnly) : []), [places]);
   const hiddenDelivery = places.status === "ready" ? places.data.places.length - all.length : 0;
   const filtered = useMemo(() => applyFilters(all, filters, ctx), [all, filters, ctx]);
+  // 새 소식 칩 옆 숫자: 다른 조건은 그대로 두고 그 소식이 있는 가게 수
+  const newsCounts = useMemo(
+    () => Object.fromEntries(NEWS_FILTERS.map((n) => [n.key, applyFilters(all, { ...filters, news: [n.key] }, ctx).length])),
+    [all, filters, ctx],
+  );
   const counts = useMemo(() => countByCategory(filtered), [filtered]);
   const inTab = useMemo(() => (tab === "all" ? filtered : filtered.filter((p) => p.category === tab)), [filtered, tab]);
   const sorted = useMemo(() => sortPlaces(inTab, filters.sort, ctx), [inTab, filters.sort, ctx]);
@@ -682,7 +688,7 @@ export function App() {
                           </h2>
                         </div>
                       </div>
-                      <FilterBar filters={filters} onChange={setFilters} />
+                      <FilterBar filters={filters} onChange={setFilters} newsCounts={newsCounts} />
                       <p className="hint hint--tight">장르를 누르면 바로 편찬 단계로 넘어가요 👇</p>
                       <CategoryTabs active={tab} counts={counts} onChange={pickGenre} />
                       <div className="page-cta">

@@ -1,6 +1,6 @@
 import { CATEGORIES } from "../../shared/categories";
 import type { CategoryKey } from "../../shared/types";
-import type { Filters } from "../lib/filters";
+import { NEWS_FILTERS, type Filters, type NewsFilter } from "../lib/filters";
 import { sfx } from "../lib/sfx";
 
 const BUDGETS = [
@@ -35,6 +35,8 @@ const WALKS = [
 interface Props {
   filters: Filters;
   onChange: (f: Filters) => void;
+  /** 새 소식 칩마다 지금 조건에 맞는 가게 수 */
+  newsCounts?: Partial<Record<NewsFilter, number>>;
 }
 
 function Segmented<T extends number>({
@@ -49,7 +51,12 @@ function Segmented<T extends number>({
   onPick: (v: T) => void;
 }) {
   return (
-    <div className="seg2" role="radiogroup" aria-label={label} style={{ "--n": options.length } as React.CSSProperties}>
+    <div
+      className="seg2"
+      role="radiogroup"
+      aria-label={label}
+      style={{ "--n": options.length } as React.CSSProperties}
+    >
       {options.map((o) => (
         <button
           type="button"
@@ -67,7 +74,15 @@ function Segmented<T extends number>({
 }
 
 /** 이름표: 넓은 화면은 아이콘 + 글자, 휴대폰은 아이콘만 */
-function Label({ icon, text, title }: { icon: string; text: string; title?: string }) {
+function Label({
+  icon,
+  text,
+  title,
+}: {
+  icon: string;
+  text: string;
+  title?: string;
+}) {
   return (
     <span className="frow__label" title={title ?? text} aria-label={text}>
       <span aria-hidden>{icon}</span>
@@ -76,18 +91,30 @@ function Label({ icon, text, title }: { icon: string; text: string; title?: stri
   );
 }
 
-/** 이동 · 도보/차로 · 점심시간 · 1인 예산 · 점심 영업 (뽑기 후보와 목록 모두에 적용) */
-export function FilterBar({ filters, onChange }: Props) {
+/** 이동 · 도보/차로 · 점심시간 · 1인 예산 · 점심 영업 · 새 소식 (뽑기 후보와 목록 모두에 적용) */
+export function FilterBar({ filters, onChange, newsCounts }: Props) {
   const set = <K extends keyof Filters>(k: K, v: Filters[K]) => {
     sfx.tagClick();
     onChange({ ...filters, [k]: v });
   };
+  const toggleNews = (k: NewsFilter) =>
+    set(
+      "news",
+      filters.news.includes(k)
+        ? filters.news.filter((x) => x !== k)
+        : [...filters.news, k],
+    );
 
   return (
     <div className="fbox">
       <div className="frow">
         <Label icon="🧭" text="이동" />
-        <div className="seg2" role="radiogroup" aria-label="이동 방법" style={{ "--n": 2 } as React.CSSProperties}>
+        <div
+          className="seg2"
+          role="radiogroup"
+          aria-label="이동 방법"
+          style={{ "--n": 2 } as React.CSSProperties}
+        >
           {(["walk", "drive"] as const).map((m) => (
             <button
               type="button"
@@ -105,29 +132,96 @@ export function FilterBar({ filters, onChange }: Props) {
       {filters.mode === "walk" ? (
         <div className="frow">
           <Label icon="🚶" text="도보" />
-          <Segmented label="도보 거리" value={filters.walk} options={WALKS} onPick={(v) => set("walk", v)} />
+          <Segmented
+            label="도보 거리"
+            value={filters.walk}
+            options={WALKS}
+            onPick={(v) => set("walk", v)}
+          />
         </div>
       ) : (
         <div className="frow">
-          <Label icon="🚗" text="차로" title="도로 우회 · 점심시간 도심 속도 · 주차를 넣은 어림" />
-          <Segmented label="차로 걸리는 시간" value={filters.drive} options={DRIVES} onPick={(v) => set("drive", v)} />
+          <Label
+            icon="🚗"
+            text="차로"
+            title="도로 우회 · 점심시간 도심 속도 · 주차를 넣은 어림"
+          />
+          <Segmented
+            label="차로 걸리는 시간"
+            value={filters.drive}
+            options={DRIVES}
+            onPick={(v) => set("drive", v)}
+          />
         </div>
       )}
       <div className="frow">
         <Label icon="⏱" text="점심시간" title="왕복 이동 + 식사 + 웨이팅" />
-        <Segmented label="점심시간 한도 (왕복 + 식사 + 웨이팅)" value={filters.timeBudget} options={BUDGETS} onPick={(v) => set("timeBudget", v)} />
+        <Segmented
+          label="점심시간 한도 (왕복 + 식사 + 웨이팅)"
+          value={filters.timeBudget}
+          options={BUDGETS}
+          onPick={(v) => set("timeBudget", v)}
+        />
       </div>
       <div className="frow">
-        <Label icon="💳" text="1인 예산" title="가격을 아는 가게 중 이 금액을 넘는 곳은 뺍니다" />
-        <Segmented label="1인 예산 (식대 한도)" value={filters.budget} options={BUDGET_WON} onPick={(v) => set("budget", v)} />
+        <Label
+          icon="💳"
+          text="1인 예산"
+          title="가격을 아는 가게 중 이 금액을 넘는 곳은 뺍니다"
+        />
+        <Segmented
+          label="1인 예산 (식대 한도)"
+          value={filters.budget}
+          options={BUDGET_WON}
+          onPick={(v) => set("budget", v)}
+        />
       </div>
-      <div className="frow">
-        <Label icon="🕛" text="영업" />
-        <label className="switch">
-          <input type="checkbox" checked={filters.lunchOnly} onChange={(e) => set("lunchOnly", e.target.checked)} />
-          <span className="switch__track" aria-hidden />
-          점심 영업하는 곳만
-        </label>
+      {/* 넓은 화면에선 '영업'과 '새 소식'을 한 줄에 */}
+      <div className="frow-pair">
+        <div className="frow">
+          <Label icon="🕛" text="영업" />
+          <label className="switch">
+            <input
+              type="checkbox"
+              checked={filters.lunchOnly}
+              onChange={(e) => set("lunchOnly", e.target.checked)}
+            />
+            <span className="switch__track" aria-hidden />
+            점심 영업하는 곳만
+          </label>
+        </div>
+        <div className="frow">
+          <Label
+            icon="🆕"
+            text="새 소식"
+            title="블로그 글에서 찾은 신규 오픈 · 이벤트 · 할인 · 시즌/신메뉴 · 점심 특선"
+          />
+          <div
+            className="chips news-chips no-swipe"
+            role="group"
+            aria-label="새 소식 필터 (여러 개 고를 수 있어요)"
+          >
+            {NEWS_FILTERS.map((n) => {
+              const on = filters.news.includes(n.key);
+              const count = newsCounts?.[n.key];
+              return (
+                <button
+                  type="button"
+                  key={n.key}
+                  className={`chip${on ? " chip--on" : ""}`}
+                  aria-pressed={on}
+                  disabled={!on && count === 0}
+                  onClick={() => toggleNews(n.key)}
+                >
+                  {n.label}
+                  {count !== undefined && (
+                    <span className="chip__n">{count}</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -143,7 +237,9 @@ interface TabsProps {
 export function CategoryTabs({ active, counts, onChange }: TabsProps) {
   const tabs = [
     { key: "all" as const, label: "전체", emoji: "🎲" },
-    ...CATEGORIES.filter((c) => (counts.get(c.key) ?? 0) > 0 || active === c.key),
+    ...CATEGORIES.filter(
+      (c) => (counts.get(c.key) ?? 0) > 0 || active === c.key,
+    ),
   ];
   return (
     <div className="gtiles" role="tablist" aria-label="식사 장르">
