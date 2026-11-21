@@ -21,7 +21,7 @@ import type { Branch, BranchPlaces, ExtraReviews, GoogleInfo, Place, WebInfo } f
 import { HttpError, mapLimit } from "./http";
 import type { KakaoPlace } from "./sources/kakao";
 import type { BlogSearchResult, SearchOptions } from "./sources/naver";
-import { blogQuery, hoursQuery, isAmbiguousName, isRelevantPost, isStrictRelevantPost, rankReviewPosts } from "./sources/naver";
+import { blogQuery, coreName, hoursQuery, isAmbiguousName, isRelevantPost, isStrictRelevantPost, rankReviewPosts } from "./sources/naver";
 
 /**
  * NaverInfo 형식 버전 — 올리면 다음 수집 때 모두 다시 조회한다
@@ -103,6 +103,8 @@ export interface Deps {
   web?: ((place: Place) => Promise<WebInfo | null>) | null;
   /** 카페 · 다음 리뷰 (선택) */
   reviewSources?: ReviewSource[];
+  /** 다음 웹문서 검색으로 영업시간 찾기 (네이버 하루 호출과 따로, 선택) */
+  daumHours?: ((query: string) => Promise<BlogSearchResult>) | null;
   log?: (msg: string) => void;
 }
 
@@ -113,6 +115,8 @@ export interface Budget {
   web?: number;
   /** 다음 검색 API 호출 수 */
   daum?: number;
+  /** 다음 웹문서 '영업시간' 검색 호출 수 */
+  daumHours?: number;
 }
 
 export interface BranchStats {
@@ -125,6 +129,8 @@ export interface BranchStats {
   webChecked: number;
   hoursCalls: number;
   hoursFound: number;
+  hoursDaumCalls: number;
+  hoursDaumFound: number;
   extraCalls: number;
   errors: number;
 }
@@ -200,6 +206,8 @@ export async function collectBranch(
     webChecked: 0,
     hoursCalls: 0,
     hoursFound: 0,
+    hoursDaumCalls: 0,
+    hoursDaumFound: 0,
     extraCalls: 0,
     errors: 0,
   };
@@ -365,6 +373,60 @@ export async function collectBranch(
       } catch (err) {
         stats.errors++;
         log(`  영업시간 검색 실패 ${p.name}: ${(err as Error).message}`);
+      }
+    });
+  }
+
+  // 2-2b) 다음 웹문서 '영업시간' 검색: 네이버에서 못 찾은 곳을 카카오(다음) 한도로 한 번 더.
+  //       걸어갈 수 있는 곳 → 가까운 곳 → 인기순. 한도 초과 · 인증 오류가 나면 이번 지점은 멈춘다
+  if (deps.daumHours && (budget.daumHours ?? 0) > 0) {
+    const daum = deps.daumHours;
+    const due = places
+      .filter(
+        (p) =>
+          !p.hours &&
+          !p.deliveryOnly &&
+          !p.naver?.ambiguous &&
+          !isAmbiguousName(coreName(p.name)) &&
+          (!p.hoursDaumAt || daysBetween(p.hoursDaumAt, today) >= cfg.hoursRefreshDays),
+      )
+      .sort(
+        (a, b) =>
+          (a.distance <= cfg.radius ? 0 : 1) - (b.distance <= cfg.radius ? 0 : 1) || a.walkMin - b.walkMin || popularity(b) - popularity(a),
+      );
+    const targets = due.slice(0, Math.max(0, budget.daumHours ?? 0));
+    budget.daumHours = (budget.daumHours ?? 0) - targets.length;
+    let stop = false;
+    await mapLimit(targets, 4, async (p) => {
+      if (stop) return;
+      const q = blogQuery(p.name, docs.find((d) => d.id === p.id)?.address_name ?? "", p.address);
+      try {
+        stats.hoursDaumCalls++;
+        const res = await daum(hoursQuery(q));
+        const relevant = res.posts.filter((post) => isRelevantPost(post, q));
+        const found = pickHours(relevant);
+        p.hoursDaumAt = today;
+        if (found) {
+          stats.hoursDaumFound++;
+          p.hours = {
+            open: found.open,
+            close: found.close,
+            breakStart: found.breakStart,
+            breakEnd: found.breakEnd,
+            lastOrder: found.lastOrder,
+            closedDays: found.closedDays,
+            text: found.text,
+            source: "blog",
+            date: found.date,
+            link: found.link,
+            checkedAt: today,
+          };
+        }
+      } catch (err) {
+        const status = (err as { status?: number }).status;
+        if (status === 401 || status === 403 || status === 429) stop = true;
+        stats.errors++;
+        log(`  다음 영업시간 검색 실패 ${p.name}: ${(err as Error).message}`);
       }
     });
   }

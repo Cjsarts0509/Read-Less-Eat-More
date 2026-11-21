@@ -195,6 +195,33 @@ describe("collectBranch", () => {
     expect(budget.ai).toBe(98);
   });
 
+  it("네이버에서 영업시간을 못 찾으면 다음 웹문서로 한 번 더 찾는다 (걸어갈 곳부터, 한도만큼)", async () => {
+    const asked: string[] = [];
+    const deps = makeDeps({
+      daumHours: async (q) => {
+        asked.push(q);
+        const name = q.match(/"(.+?)"/)?.[1] ?? "";
+        return {
+          total: 1,
+          posts: [{ title: `${name} 방문기`, link: `https://tistory/${name}`, date: "2026-11-01", snippet: "영업시간 11:00~21:00 브레이크타임 15:00~17:00" }],
+        };
+      },
+    });
+    const budget = { naver: 100, google: 0, ai: 0, daumHours: 1 };
+    const { data, stats } = await collectBranch(branch, null, DEFAULT_CONFIG, deps, budget);
+    expect(asked).toHaveLength(1);
+    expect(asked[0]).toContain("영업시간");
+    const hit = data.places.find((p) => p.hours);
+    expect(hit?.hours).toMatchObject({ open: "11:00", close: "21:00", breakStart: "15:00", source: "blog", link: expect.stringContaining("tistory") });
+    expect(hit?.hoursDaumAt).toBe(today);
+    expect(stats.hoursDaumFound).toBe(1);
+    expect(budget.daumHours).toBe(0);
+    // 다음 날 다시 돌려도 이미 찾은 곳은 다시 묻지 않는다
+    asked.length = 0;
+    await collectBranch(branch, data, DEFAULT_CONFIG, deps, { naver: 100, google: 0, ai: 0, daumHours: 5 });
+    expect(asked.some((q) => q.includes(hit!.name.split(" ")[0]!))).toBe(false);
+  });
+
   it("AI 예산이 모자라면 대기로 남기고, 다음 실행에서 우선 처리한다", async () => {
     const deps = makeDeps();
     const first = await collectBranch(branch, null, DEFAULT_CONFIG, deps, { naver: 100, google: 0, ai: 1 });

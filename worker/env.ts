@@ -15,6 +15,8 @@ export interface Env {
   /** 실시간 확인에 쓸 모델 (없으면 WEB_MODEL → CLAUDE_MODEL) */
   LIVE_MODEL?: string;
   WEB_MODEL?: string;
+  /** 카카오 REST API 키 (다음 이미지 검색 — 음식 · 메뉴판 사진) */
+  KAKAO_REST_API_KEY?: string;
 }
 
 export const DEFAULT_MODEL = "claude-opus-5-5";

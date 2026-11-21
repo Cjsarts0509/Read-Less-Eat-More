@@ -9,6 +9,7 @@
  *  - /api/menus        지점별 제보된 메뉴판
  *  - /api/place-live   상세 화면 실시간 확인 (영업시간 · 메뉴, AI 웹 검색 + Supabase 캐시)
  *  - /api/naver-ids    그 확인에서 찾은 네이버 지도 가게 번호 (지점별)
+ *  - /api/place-photos 음식 · 메뉴판 사진 (다음 이미지 검색, 7일 캐시)
  *  - /api/reviews      사내 한줄평 · 별점
  *  - /api/balance      오늘의 밸런스 게임
  */
@@ -17,6 +18,7 @@ import { handleChat } from "./chat";
 import { HttpError, json, todayKst, type Env } from "./env";
 import { handleBalance } from "./balance";
 import { handleNaverIds, handlePlaceLive } from "./live";
+import { handlePlacePhotos } from "./photos";
 import { handleReviews } from "./reviews";
 import { handleMenuPhoto, handleMenus } from "./menus";
 import { handleRooms } from "./rooms";
@@ -36,7 +38,7 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
     case "health":
       return json({ ok: true, today: todayKst() });
     case "config":
-      return json({ ai: Boolean(env.ANTHROPIC_API_KEY), store: hasSupabase(env) });
+      return json({ ai: Boolean(env.ANTHROPIC_API_KEY), store: hasSupabase(env), photos: Boolean(env.KAKAO_REST_API_KEY) });
     case "weather":
       return handleWeather(request, env, ctx);
     case "chat":
@@ -53,6 +55,8 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
       return handlePlaceLive(request, env);
     case "naver-ids":
       return handleNaverIds(request, env);
+    case "place-photos":
+      return handlePlacePhotos(request, env, ctx);
     case "reviews":
       return handleReviews(request, env);
     case "balance":

@@ -10,6 +10,7 @@ import { bookTitleOf } from "../lib/booktitle";
 import { priceOf, type Ctx } from "../lib/filters";
 import { kakaoPlaceUrl, naverMapUrl, rememberNaverIds } from "../lib/links";
 import { InhouseReviews } from "./InhouseReviews";
+import { PlacePhotos } from "./PlacePhotos";
 import { Badges, BlogCount, InhouseChip, LunchLine, PlaceLinks, PriceChip, TravelLine } from "./PlaceCard";
 import { ClosureNotice, HoursLine, MenuReports, PlaceSignals, WebInfoBox } from "./PlaceExtras";
 
@@ -176,6 +177,8 @@ interface Props {
   menus?: MenuReport[];
   upload: { branch: string; onDone: () => void } | null;
   live: boolean;
+  /** 음식 · 메뉴판 사진 (카카오 키가 워커에 있을 때) */
+  photos?: boolean;
   /** 사내 한줄평을 쓸 수 있는가 (저장소가 켜져 있을 때) */
   canReview: boolean;
   onReviewSaved: (placeId: string, s: ReviewSummary | null) => void;
@@ -184,7 +187,7 @@ interface Props {
 }
 
 /** 가게 상세 팝업 (휴대폰에서는 아래에서 올라오는 시트) */
-export function PlaceDetail({ place: base, ctx, branch, menus, upload, live, canReview, onReviewSaved, onClose, onShowOnMap }: Props) {
+export function PlaceDetail({ place: base, ctx, branch, menus, upload, live, photos = false, canReview, onReviewSaved, onClose, onShowOnMap }: Props) {
   const [found, setFound] = useState<PlaceLiveResponse | null>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   // 실시간 확인 결과를 반영한 가게 (영업시간 · 네이버 가게 번호)
@@ -292,6 +295,8 @@ export function PlaceDetail({ place: base, ctx, branch, menus, upload, live, can
             />
           )}
           {!found && <WebInfoBox place={place} />}
+
+          {photos && !place.id.startsWith("demo-") && <PlacePhotos branch={branch} placeId={place.id} />}
 
           {(canReview || ctx.reviews?.[place.id]) && (
             <InhouseReviews

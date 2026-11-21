@@ -1,8 +1,9 @@
 /**
- * 다음 검색 API (카카오) — 블로그(티스토리 · 다음 · 브런치 등) · 카페 글.
+ * 다음 검색 API (카카오) — 블로그(티스토리 · 다음 · 브런치 등) · 카페 글 · 웹문서.
  * 카카오 로컬과 같은 REST API 키를 쓴다.
  *   GET https://dapi.kakao.com/v2/search/blog?query=…&sort=accuracy&size=50
  *   GET https://dapi.kakao.com/v2/search/cafe?query=…&sort=accuracy&size=50
+ *   GET https://dapi.kakao.com/v2/search/web?query=…&sort=accuracy&size=50   (영업시간 찾기)
  */
 import { fetchJson, type FetchLike } from "../http";
 import type { BlogSearchResult } from "./naver";
@@ -22,7 +23,7 @@ interface DaumResponse {
   documents?: DaumDoc[];
 }
 
-export type DaumKind = "blog" | "cafe";
+export type DaumKind = "blog" | "cafe" | "web";
 
 export function parseDaumResponse(data: DaumResponse): BlogSearchResult {
   const docs = Array.isArray(data.documents) ? data.documents : [];

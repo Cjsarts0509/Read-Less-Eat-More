@@ -937,6 +937,7 @@ export function App() {
           menus={menus[detailPlace.id]}
           upload={upload}
           live={config.ai && config.store && !DEMO}
+          photos={Boolean(config.photos) && !DEMO}
           canReview={config.store && !DEMO}
           onReviewSaved={(id, s) => setReviews((r) => (s ? { ...r, [id]: s } : r))}
           onClose={closeDetail}

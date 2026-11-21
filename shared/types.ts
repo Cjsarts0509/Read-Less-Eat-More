@@ -234,6 +234,8 @@ export interface Place {
   hours?: HoursInfo | null;
   /** 블로그 '영업시간' 검색을 마지막으로 한 날 (못 찾았어도 기록) */
   hoursCheckedAt?: string;
+  /** 다음 웹문서 '영업시간' 검색을 마지막으로 한 날 (네이버와 따로 센다) */
+  hoursDaumAt?: string;
   /** 배달 · 포장 전문점이라 매장에서 먹을 수 없음 */
   deliveryOnly?: boolean;
   /** AI 예산이 모자라 분석을 미룬 경우 (다음 수집 때 우선 처리) */

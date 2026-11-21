@@ -3,7 +3,8 @@ import type { Place } from "../shared/types";
 import { describeCandidate } from "../worker/candidates";
 import { cleanPrefs, defaultDeadline, newRoomCode } from "../worker/rooms";
 import { ruleLine } from "../worker/weather";
-import { handlePlaceLive } from "../worker/live";
+import { handleNaverIds, handlePlaceLive } from "../worker/live";
+import { handlePlacePhotos, toPhotos } from "../worker/photos";
 import type { Env } from "../worker/env";
 
 describe("투표방", () => {
@@ -155,5 +156,68 @@ describe("사내 한줄평", () => {
     expect(s["2"]!.mine).toBeUndefined();
     expect(JSON.stringify(s)).not.toContain("you-1234567");
     expect(cleanComment("  맛있어요\n https://spam.example  최고 ")).toBe("맛있어요 최고");
+  });
+});
+
+describe("음식 · 메뉴판 사진", () => {
+  const place = { id: "123", name: "삼정모밀 상암점", address: "서울 마포구 상암동 1601", categoryPath: "일식" };
+  const env = (over: Partial<Env> = {}): Env =>
+    ({
+      ASSETS: {
+        fetch: async () => new Response(JSON.stringify({ branch: "HO1", places: [place] }), { headers: { "content-type": "application/json" } }),
+      },
+      KAKAO_REST_API_KEY: "kakao",
+      ...over,
+    }) as unknown as Env;
+
+  it("썸네일은 https 만, 같은 글은 한 장만, 최대 8장", () => {
+    const docs = [
+      { thumbnail_url: "http://search1.kakaocdn.net/a.jpg", doc_url: "https://blog/1", display_sitename: "티스토리", datetime: "2026-10-01T10:00:00.000+09:00" },
+      { thumbnail_url: "https://search1.kakaocdn.net/b.jpg", doc_url: "https://blog/1" },
+      { thumbnail_url: "javascript:alert(1)", doc_url: "https://blog/2" },
+      ...Array.from({ length: 12 }, (_, i) => ({ thumbnail_url: `https://t/${i}.jpg`, doc_url: `https://doc/${i}` })),
+    ];
+    const out = toPhotos(docs);
+    expect(out).toHaveLength(8);
+    expect(out[0]).toEqual({ thumb: "https://search1.kakaocdn.net/a.jpg", link: "https://blog/1", site: "티스토리", date: "2026-10-01" });
+    expect(out.some((p) => p.thumb.startsWith("javascript"))).toBe(false);
+  });
+
+  it("서버 데이터의 가게 이름 · 동네로만 검색한다", async () => {
+    let asked = "";
+    const res = await handlePlacePhotos(new Request("https://x/api/place-photos?b=HO1&id=123"), env(), undefined, (async (url: string) => {
+      asked = decodeURIComponent(String(url));
+      return new Response(JSON.stringify({ documents: [{ thumbnail_url: "https://t/1.jpg", doc_url: "https://doc/1" }] }));
+    }) as unknown as typeof fetch);
+    const body = (await res.json()) as { photos: unknown[]; query: string };
+    expect(asked).toContain("dapi.kakao.com/v2/search/image");
+    expect(body.query).toBe('"삼정모밀" 상암동 메뉴');
+    expect(body.photos).toHaveLength(1);
+    expect(res.headers.get("cache-control")).toContain("max-age=604800");
+  });
+
+  it("카카오 키가 없으면 빈 목록, 모르는 가게는 404", async () => {
+    const off = await handlePlacePhotos(new Request("https://x/api/place-photos?b=HO1&id=123"), env({ KAKAO_REST_API_KEY: undefined }));
+    expect(((await off.json()) as { photos: unknown[] }).photos).toEqual([]);
+    await expect(
+      handlePlacePhotos(new Request("https://x/api/place-photos?b=HO1&id=999"), env(), undefined, (async () => new Response("{}")) as unknown as typeof fetch),
+    ).rejects.toMatchObject({ status: 404 });
+  });
+});
+
+describe("네이버 지도 가게 번호 모음", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it("실시간 확인에서 찾은 번호만, 숫자인 것만 돌려준다", async () => {
+    let asked = "";
+    vi.stubGlobal("fetch", async (url: string) => {
+      asked = String(url);
+      return new Response(JSON.stringify([{ place_id: "1", nid: "1234567" }, { place_id: "2", nid: "abc" }]));
+    });
+    const res = await handleNaverIds(
+      new Request("https://x/api/naver-ids?b=HO1"),
+      { SUPABASE_URL: "https://x.supabase.co", SUPABASE_SECRET_KEY: "sb_secret_x" } as unknown as Env,
+    );
+    expect(asked).toContain("branch_code=eq.HO1");
+    expect(((await res.json()) as { ids: Record<string, string> }).ids).toEqual({ "1": "1234567" });
   });
 });

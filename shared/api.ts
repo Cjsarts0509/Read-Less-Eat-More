@@ -65,3 +65,17 @@ export interface BalanceResponse {
 export interface NaverIdsResponse {
   ids: Record<string, string>;
 }
+
+/** 음식 · 메뉴판 사진 (다음 이미지 검색). 썸네일 + 원래 글 */
+export interface PlacePhoto {
+  thumb: string;
+  link: string;
+  site: string;
+  date: string | null;
+}
+
+export interface PlacePhotosResponse {
+  photos: PlacePhoto[];
+  /** 검색에 쓴 말 (없으면 꺼져 있음) */
+  query: string | null;
+}

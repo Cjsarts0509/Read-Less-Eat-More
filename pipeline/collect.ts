@@ -85,6 +85,7 @@ async function main() {
     : null;
   const regionCity = new Map<string, string>();
 
+  let daumHoursOff = false;
   const deps: Deps = {
     today,
     nowIso: now.toISOString(),
@@ -110,6 +111,20 @@ async function main() {
       { key: "daumBlog" as const, pool: "daum" as const, search: (q: string) => searchDaum("blog", q, kakaoKey), exclude: /blog\.naver\.com/ },
       { key: "daumCafe" as const, pool: "daum" as const, search: (q: string) => searchDaum("cafe", q, kakaoKey), exclude: /cafe\.naver\.com/ },
     ],
+    // 영업시간: 네이버에서 못 찾은 곳을 다음 웹문서로 한 번 더 (한도 초과 · 인증 오류면 이번 수집 동안 끈다)
+    daumHours: async (q: string) => {
+      if (daumHoursOff) throw Object.assign(new Error("다음 웹문서 검색 꺼짐"), { status: 429 });
+      try {
+        return await searchDaum("web", q, kakaoKey);
+      } catch (err) {
+        const status = (err as { status?: number }).status;
+        if (status === 401 || status === 403 || status === 429) {
+          daumHoursOff = true;
+          console.warn(`⚠️  다음 웹문서 검색을 이번 수집 동안 끕니다 (HTTP ${status})`);
+        }
+        throw err;
+      }
+    },
     log: (m) => console.log(m),
   };
 
@@ -156,6 +171,7 @@ async function main() {
     ai: envInt("AI_MAX_PLACES_PER_RUN", 300),
     web: anthropicKey ? envInt("WEB_SEARCH_MAX_PER_RUN", 20) : 0,
     daum: envInt("DAUM_DAILY_BUDGET", 10000),
+    daumHours: envInt("DAUM_HOURS_DAILY_BUDGET", 8000),
   };
   const remaining = { ...total };
 
@@ -173,6 +189,7 @@ async function main() {
       ai: Math.ceil(remaining.ai / left),
       web: Math.ceil((remaining.web ?? 0) / left),
       daum: Math.ceil((remaining.daum ?? 0) / left),
+      daumHours: Math.ceil((remaining.daumHours ?? 0) / left),
     };
     const before = { ...share };
     const file = path.join(DATA_DIR, "places", `${branch.code}.json`);
@@ -183,7 +200,7 @@ async function main() {
       await writeFile(file, serializeBranchPlaces(data), "utf8");
       index.branches[branch.code] = { updatedAt: data.generatedAt, count: data.places.length };
       console.log(
-        `✅ ${branch.label.padEnd(8)} 카카오 ${stats.kakao} → ${stats.kept}곳 · 네이버 ${stats.naverCalls} · Google ${stats.googleCalls} · AI ${stats.aiAnalyzed}${stats.aiPending ? ` (대기 ${stats.aiPending})` : ""} · 영업시간 ${stats.hoursFound}/${stats.hoursCalls} · 다른 리뷰 ${stats.extraCalls} · 웹 ${stats.webChecked}${stats.errors ? ` · 오류 ${stats.errors}` : ""}`,
+        `✅ ${branch.label.padEnd(8)} 카카오 ${stats.kakao} → ${stats.kept}곳 · 네이버 ${stats.naverCalls} · Google ${stats.googleCalls} · AI ${stats.aiAnalyzed}${stats.aiPending ? ` (대기 ${stats.aiPending})` : ""} · 영업시간 ${stats.hoursFound}/${stats.hoursCalls} (다음 ${stats.hoursDaumFound}/${stats.hoursDaumCalls}) · 다른 리뷰 ${stats.extraCalls} · 웹 ${stats.webChecked}${stats.errors ? ` · 오류 ${stats.errors}` : ""}`,
       );
     } catch (err) {
       failures++;
@@ -194,6 +211,7 @@ async function main() {
     remaining.ai -= before.ai - share.ai;
     remaining.web = (remaining.web ?? 0) - ((before.web ?? 0) - (share.web ?? 0));
     remaining.daum = (remaining.daum ?? 0) - ((before.daum ?? 0) - (share.daum ?? 0));
+    remaining.daumHours = (remaining.daumHours ?? 0) - ((before.daumHours ?? 0) - (share.daumHours ?? 0));
   }
 
   index.generatedAt = now.toISOString();

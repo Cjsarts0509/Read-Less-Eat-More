@@ -1,5 +1,5 @@
 /** Worker API 호출 모음 */
-import type { BalanceResponse, MenuReport, NaverIdsResponse, PlaceLiveResponse, ReviewSummary, WeatherResponse } from "../../shared/api";
+import type { BalanceResponse, MenuReport, NaverIdsResponse, PlaceLiveResponse, PlacePhotosResponse, ReviewSummary, WeatherResponse } from "../../shared/api";
 import { readStore, writeStore } from "./storage";
 
 export type { MenuReport, PlaceLiveResponse, ReviewSummary, WeatherResponse };
@@ -133,3 +133,8 @@ export async function uploadMenuPhoto(args: { branch: string; placeId: string; p
 /* ---------- 네이버 지도 가게 번호 ---------- */
 
 export const fetchNaverIds = (branch: string) => call<NaverIdsResponse>(`/api/naver-ids?b=${encodeURIComponent(branch)}`);
+
+/* ---------- 음식 · 메뉴판 사진 ---------- */
+
+export const fetchPlacePhotos = (branch: string, id: string) =>
+  call<PlacePhotosResponse>(`/api/place-photos?b=${encodeURIComponent(branch)}&id=${encodeURIComponent(id)}`);

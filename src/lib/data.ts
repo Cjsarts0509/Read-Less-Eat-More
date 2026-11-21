@@ -36,11 +36,13 @@ export interface AppConfig {
   ai: boolean;
   /** Supabase 저장소 (투표방 · 메뉴판 사진 · 날씨) */
   store: boolean;
+  /** 음식 · 메뉴판 사진 (카카오 키가 워커에 있을 때) */
+  photos?: boolean;
 }
 
 export async function loadConfig(): Promise<AppConfig> {
   const c = await getJson<Partial<AppConfig>>("/api/config");
-  return { ai: Boolean(c?.ai), store: Boolean(c?.store) };
+  return { ai: Boolean(c?.ai), store: Boolean(c?.store), photos: Boolean(c?.photos) };
 }
 
 /** 한국 시간 오늘 YYYY-MM-DD */
